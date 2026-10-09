@@ -31,6 +31,8 @@ function M.discard_empty_buffers()
   end
 end
 function M.open_file(path, buf)
+  -- Neo-tree passes -1 when the file does not have a buffer yet.
+  if buf and (buf < 1 or not vim.api.nvim_buf_is_valid(buf)) then buf = nil end
   if buf and vim.bo[buf].buftype == "terminal" then
     require("config.sidebar").show_terminal(buf)
     return
