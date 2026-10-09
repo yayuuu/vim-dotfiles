@@ -1,0 +1,105 @@
+local M = { cache = {}, sequence = 0, fetching = {}, fetched_at = {} }
+
+local function redraw()
+  if package.loaded.lualine then require("lualine").refresh({ force = true }) end
+end
+
+function M.fetch(root, force)
+  if M.busy or M.fetching[root] or vim.g.ide_git_autofetch == false then return end
+  local now = vim.uv.hrtime() / 1e9
+  if not force and now - (M.fetched_at[root] or -math.huge) < 60 then return end
+  M.fetched_at[root], M.fetching[root] = now, true
+  vim.system({ "git", "-C", root, "fetch", "--quiet" }, {
+    text = true, env = { GIT_TERMINAL_PROMPT = "0" }, timeout = 30000,
+  }, function()
+    vim.schedule(function()
+      M.fetching[root] = nil
+      if root == require("config.ide").root() then M.refresh() end
+    end)
+  end)
+end
+
+function M.refresh()
+  local root = require("config.ide").root()
+  M.sequence = M.sequence + 1
+  local sequence = M.sequence
+  vim.system({ "git", "-C", root, "rev-parse", "--show-toplevel" }, { text = true }, function(repo)
+    if repo.code ~= 0 then
+      vim.schedule(function() if sequence == M.sequence then M.cache[root] = { repo = false }; redraw() end end)
+      return
+    end
+    vim.system({ "git", "-C", root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}" },
+      { text = true }, function(result)
+        vim.schedule(function()
+          if sequence ~= M.sequence then return end
+          local ahead, behind = (result.stdout or ""):match("(%d+)%s+(%d+)")
+          M.cache[root] = { repo = true, upstream = result.code == 0, ahead = tonumber(ahead), behind = tonumber(behind) }
+          redraw()
+          if result.code == 0 then M.fetch(root) end
+        end)
+      end)
+  end)
+end
+
+function M.visible()
+  local state = M.cache[require("config.ide").root()]
+  return state and state.repo or false
+end
+
+function M.label()
+  local state = M.cache[require("config.ide").root()]
+  if not state or not state.repo then return "" end
+  if M.busy then return "[↑… ↓…]" end
+  return string.format("[↑%s ↓%s]", state.ahead or "–", state.behind or "–")
+end
+
+function M.sync()
+  if M.busy then return end
+  local root = require("config.ide").root()
+  local upstream = vim.system({ "git", "-C", root, "rev-parse", "--abbrev-ref", "@{upstream}" }, { text = true }):wait()
+  if upstream.code ~= 0 then
+    vim.notify("This branch has no upstream. Configure its remote branch before synchronizing.", vim.log.levels.INFO)
+    return
+  end
+  M.busy = true; redraw()
+  local commands = { { "fetch", "--quiet" }, { "pull", "--no-edit" }, { "push" } }
+  local function finish(error)
+    M.busy = false
+    if error then vim.notify(error, vim.log.levels.ERROR)
+    else vim.notify("Repository synchronized", vim.log.levels.INFO) end
+    vim.cmd("checktime")
+    require("config.git").refresh()
+  end
+  local function run(index)
+    if not commands[index] then finish(); return end
+    local command = { "git", "-C", root }; vim.list_extend(command, commands[index])
+    vim.system(command, { text = true, env = { GIT_TERMINAL_PROMPT = "0", GIT_EDITOR = "true" }, timeout = 120000 }, function(result)
+      vim.schedule(function()
+        if result.code ~= 0 then finish("Git " .. commands[index][1] .. " failed:\n" .. (result.stderr or result.stdout or ""))
+        else run(index + 1) end
+      end)
+    end)
+  end
+  local function start()
+    -- An automatic fetch may already own the refs lock. Let it finish before
+    -- starting the explicit pull/push sequence for this captured repository.
+    if M.fetching[root] then vim.defer_fn(start, 100) else run(1) end
+  end
+  start()
+end
+
+function M.setup()
+  local group = vim.api.nvim_create_augroup("DesktopGitSync", { clear = true })
+  local pending = false
+  local function queue()
+    if pending then return end
+    pending = true
+    vim.defer_fn(function() pending = false; M.refresh() end, 100)
+  end
+  vim.api.nvim_create_autocmd({ "FocusGained", "DirChanged", "BufWritePost", "ShellCmdPost", "TermLeave" }, {
+    group = group, callback = queue })
+  local timer = vim.uv.new_timer()
+  timer:start(0, 15000, vim.schedule_wrap(queue))
+  vim.api.nvim_create_autocmd("VimLeavePre", { group = group, once = true, callback = function() timer:stop(); timer:close() end })
+end
+return M
