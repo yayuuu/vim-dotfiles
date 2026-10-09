@@ -54,6 +54,7 @@ function M.prepare(args)
   -- default dimensions; those programmatic resizes aren't manual drags.
   if not M.changing then require("config.layout").save() end
   M.prepared, M.changing = true, true
+  if args.source ~= "debug" and package.loaded["config.debugger"] then require("config.debugger").close() end
 end
 
 local function close_kind(filetype)
@@ -143,59 +144,16 @@ local function history(tree)
   M.refresh_history()
 end
 
-function M.show_terminal(buf)
-  for _, terminal in ipairs(Snacks.terminal.list()) do
-    if terminal.buf == buf then
-      local editor = require("config.ide").editor_window()
-      for _, other in ipairs(Snacks.terminal.list()) do if other ~= terminal then other:hide() end end
-      terminal.opts.relative, terminal.opts.position, terminal.opts.win = "win", "bottom", editor
-      terminal:show(); terminal:focus()
-      require("config.layout").reflow()
-      vim.cmd("startinsert")
-      return
-    end
-  end
-end
-
-function M.refresh_terminals()
-  if not valid(M.terminal_win) then return end
-  local rows, buffers = {}, {}
-  local terminals = Snacks.terminal.list()
-  table.sort(terminals, function(a,b) return a.buf < b.buf end)
-  for _, terminal in ipairs(terminals) do
-    if terminal.buf and api.nvim_buf_is_valid(terminal.buf) then
-      local info = vim.b[terminal.buf].snacks_terminal or {}
-      rows[#rows + 1] = " " .. (info.id or #rows + 1) .. ": " .. (info.cmd and vim.inspect(info.cmd) or "bash")
-        .. " — " .. vim.fn.fnamemodify(info.cwd or terminal.opts.cwd or require("config.ide").root(), ":~")
-      buffers[#rows] = terminal.buf
-    end
-  end
-  M.terminals = buffers
-  lines(M.terminal_buf, #rows > 0 and rows or { "No open terminals" })
-end
-
-local function terminals(tree)
-  M.terminal_win, M.terminal_buf = list_window("ide_terminal_list", " Terminals ", tree)
-  local function open()
-    local buf = M.terminals[api.nvim_win_get_cursor(M.terminal_win)[1]]
-    if buf then M.show_terminal(buf) end
-  end
-  for _, key in ipairs({ "<CR>", "<LeftRelease>", "<2-LeftRelease>" }) do
-    vim.keymap.set({ "n", "i" }, key, open, { buffer = M.terminal_buf, desc = "Focus terminal below editor" })
-  end
-  M.refresh_terminals()
-end
-
 function M.update()
   if M.updating then return end
   local state, tree = M.state()
   if not state then return end
   local source = state.name
-  local expected = source == "git_status" and "ide_git_history" or source == "buffers" and "ide_terminal_list"
-    or source == "filesystem" and "aerial" or nil
+  local expected = source == "git_status" and "ide_git_history" or source == "filesystem" and "aerial"
+    or source == "debug" and "debug" or nil
   if M.source == source and (not expected or (expected == "aerial" and require("aerial").is_open()
     or expected == "ide_git_history" and valid(M.history_win)
-    or expected == "ide_terminal_list" and valid(M.terminal_win))) then
+    or expected == "debug" and require("config.debugger").is_open())) then
     if M.prepared then
       M.prepared = false
       require("config.layout").reflow()
@@ -212,10 +170,10 @@ function M.update()
   local ok, err = pcall(function()
     if expected ~= "aerial" then require("aerial.window").close_all() end
     if expected ~= "ide_git_history" then close_kind("ide_git_history") end
-    if expected ~= "ide_terminal_list" then close_kind("ide_terminal_list") end
+    if expected ~= "debug" and package.loaded["config.debugger"] then require("config.debugger").close() end
     if expected == "aerial" then require("config.ide").outline()
     elseif expected == "ide_git_history" then history(tree)
-    elseif expected == "ide_terminal_list" then terminals(tree) end
+    elseif expected == "debug" then require("config.debugger").open(tree) end
     api.nvim_win_set_width(tree, width)
     require("config.layout").apply()
   end)
@@ -237,8 +195,6 @@ end
 function M.setup()
   _G.DesktopGitHistoryRefresh = function() vim.schedule(M.refresh_history) end
   local group = api.nvim_create_augroup("DesktopSidebarSections", { clear = true })
-  api.nvim_create_autocmd({ "TermOpen", "TermClose", "BufDelete" }, { group = group,
-    callback = function() vim.schedule(M.refresh_terminals) end })
   api.nvim_create_autocmd({ "FocusGained", "TermLeave", "ShellCmdPost" }, { group = group,
     callback = function() vim.schedule(M.refresh_history) end })
 end

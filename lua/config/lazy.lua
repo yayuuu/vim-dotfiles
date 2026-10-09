@@ -14,7 +14,9 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+require("config.popup_ui").setup()
 require("lazy").setup({
+  ui = { border = "rounded", title = " Plugins ", title_pos = "center" },
   spec = {
     -- add LazyVim and import its plugins
     { "LazyVim/LazyVim", import = "lazyvim.plugins" },

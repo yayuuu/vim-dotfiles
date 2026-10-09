@@ -13,6 +13,13 @@ return {
     win_opts = { winbar = " Functions / Symbols ", number = false, relativenumber = false },
   }, config = function(_, opts)
     require("aerial").setup(opts)
+    -- Keep empty Symbols panels compact; backend details remain in :AerialInfo.
+    local util = require("aerial.util")
+    local render_centered_text = util.render_centered_text
+    util.render_centered_text = function(buf, text)
+      if type(text) == "table" and text[1] == "No symbols" then text = { "No symbols" } end
+      return render_centered_text(buf, text)
+    end
     local window = require("aerial.window")
     local open = window.open_aerial_in_win
     local pending = false
@@ -50,7 +57,7 @@ return {
   -- ASCII file badges work with the existing Unifont in kmscon.
   { "nvim-mini/mini.icons", opts = { style = "ascii" } },
   { "nvim-neo-tree/neo-tree.nvim", opts = {
-    sources = { "config.project_source", "filesystem", "config.git_source", "config.tab_source" },
+    sources = { "config.project_source", "filesystem", "config.debug_source", "config.git_source", "config.tab_source" },
     close_if_last_window = false,
     open_files_do_not_replace_types = { "aerial", "NvMenu", "neominimap", "snacks_terminal", "terminal", "nofile", "prompt", "quickfix", "Trouble", "trouble", "qf", "Outline" },
     event_handlers = { { event = "after_render", handler = function(state) require("config.git").after_render(state) end },
@@ -62,11 +69,20 @@ return {
       require("config.ide").open_file(args.path, args.bufnr)
       return { handled = true }
     end } },
-    source_selector = { winbar = true, statusline = false, tabs_layout = "start", sources = {
+    source_selector = { winbar = true, statusline = false, tabs_layout = "start", padding = { left = 1, right = 0 },
+      separator = { left = "", right = " ", override = "right" }, sources = {
       { source = "projects", display_name = "Projects" },
       { source = "filesystem", display_name = "Files" },
+      { source = "debug", display_name = "Debug" },
       { source = "git_status", display_name = "Git" },
       { source = "buffers", display_name = "Tabs" },
+    } },
+    filesystem = { commands = {
+      open = function(state)
+        local node = state.tree and state.tree:get_node()
+        if not node or node.type == "message" then return end
+        require("neo-tree.sources.filesystem.commands").open(state)
+      end,
     } },
     git_status = { bind_to_cwd = false, cwd_target = { sidebar = "global", current = "global" }, components = {
       name = function(...) return require("config.git").name(...) end,
@@ -102,9 +118,13 @@ return {
     persist_buffer_sort = false,
     sort_by = function(a,b) return require("config.tabs").compare(a,b) end,
     separator_style = "thin", buffer_close_icon = "×", close_icon = "×",
+    indicator = { style = "icon", icon = "" },
     modified_icon = "●", left_trunc_marker = "<", right_trunc_marker = ">",
     close_command = function(buf) require("config.ide").close_buffer(buf) end,
-    left_mouse_command = function(buf) require("config.ide").open_file(nil, buf); vim.cmd("startinsert") end,
+    left_mouse_command = function(buf)
+      require("config.ide").open_file(nil, buf)
+      if vim.bo.modifiable and vim.bo.buftype == "" then vim.cmd("startinsert") end
+    end,
     right_mouse_command = function(buf) require("config.ide").tab_menu(buf) end,
     middle_mouse_command = function(buf) require("config.ide").close_buffer(buf) end,
     offsets = {},
@@ -140,17 +160,32 @@ return {
   { "folke/snacks.nvim", opts = {
     dashboard = { enabled = false }, scroll = { enabled = false },
     terminal = { win = { position = "bottom", relative = "win", height = 0.25, stack = false, resize = false }, shell = "/bin/bash" },
-    picker = { icons = { files = { enabled = false }, tree = { vertical = "│ ", middle = "├─", last = "└─" } } },
+    input = { win = { on_win = function(win)
+      require("config.popup_ui").register(win.win, function() win:execute("cancel") end)
+    end } },
+    picker = {
+      on_show = function(picker)
+        require("config.popup_ui").register(picker.layout.root.win, function() picker:close() end)
+      end,
+      icons = { files = { enabled = false }, tree = { vertical = "│ ", middle = "├─", last = "└─" } },
+    },
   } },
   { "sindrets/diffview.nvim", cmd = { "DiffviewOpen", "DiffviewFileHistory" }, opts = { use_icons = false } },
   { "nvzone/menu", lazy = true, dependencies = { "nvzone/volt" } },
-  { "rcarriga/nvim-dap-ui", opts = {
-    icons = { expanded = "v", collapsed = ">", current_frame = ">" },
-    controls = { enabled = true, icons = { pause = "||", play = ">", step_into = "v", step_over = ">|", step_out = "^", step_back = "<", run_last = "R", terminate = "X", disconnect = "D" } },
-    layouts = {
-      { elements = { { id = "scopes", size = 0.50 }, { id = "breakpoints", size = 0.20 }, { id = "stacks", size = 0.20 }, { id = "watches", size = 0.10 } }, size = 38, position = "left" },
-      { elements = { { id = "repl", size = 0.5 }, { id = "console", size = 0.5 } }, size = 12, position = "bottom" },
-    },
+  { "rcarriga/nvim-dap-ui", opts = function(_, opts)
+    opts.expand_lines = false
+    opts.select_window = function() return require("config.ide").editor_window() end
+    opts.icons = { expanded = "v", collapsed = ">", current_frame = ">" }
+    opts.controls = { enabled = true, icons = { pause = "||", play = ">", step_into = "v", step_over = ">|", step_out = "^", step_back = "<", run_last = "R", terminate = "X", disconnect = "D" } }
+    opts.layouts = {}
+  end, config = function(_, opts)
+    require("dapui").setup(opts)
+    require("config.debugger").setup(require("dap"))
+  end, keys = {
+    { "<leader>du", function() require("config.debugger").show() end, desc = "Debug sidebar" },
+  } },
+  { "mfussenegger/nvim-dap", keys = {
+    { "<leader>dr", function() require("config.terminals").show_debug_console() end, desc = "Debug console" },
   } },
   { "mason-org/mason.nvim", opts = { ensure_installed = {
     "lua-language-server", "stylua", "pyright", "ruff", "bash-language-server", "shfmt", "vtsls", "prettier", "debugpy", "codelldb", "js-debug-adapter",

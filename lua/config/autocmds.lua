@@ -1,8 +1,11 @@
 local group = vim.api.nvim_create_augroup("DesktopIDE", { clear = true })
 require("config.layout").setup()
 require("config.diff").setup()
+require("config.documents").setup()
+require("config.terminals").setup()
 require("config.editor_tabs").setup()
 require("config.hscroll").setup()
+require("config.breakpoints").setup()
 require("config.tabs").setup()
 require("config.git").setup()
 require("config.sidebar").setup()
@@ -61,6 +64,7 @@ vim.api.nvim_create_autocmd("BufEnter", {
   group = group,
   callback = function(event)
     if vim.api.nvim_win_get_config(0).relative ~= "" or vim.w.snacks_picker_preview
+      or require("config.ide").is_tool_tab()
       or vim.bo[event.buf].buftype ~= "" or vim.api.nvim_buf_get_name(event.buf) == ""
       or vim.fn.isdirectory(vim.api.nvim_buf_get_name(event.buf)) == 1 then return end
     vim.bo[event.buf].buflisted = true
@@ -96,10 +100,12 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
   group = group,
   callback = function()
     if #vim.api.nvim_list_uis() > 0 and vim.bo.buftype == "" and vim.bo.modifiable
+      and not require("config.ide").is_tool_tab()
       and vim.api.nvim_win_get_config(0).relative == "" then
       local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
       vim.schedule(function()
         if vim.api.nvim_get_current_win() == win and vim.api.nvim_get_current_buf() == buf
+          and not require("config.ide").is_tool_tab()
           and vim.bo.buftype == "" and vim.bo.modifiable and vim.fn.mode() == "n" then
           vim.cmd("startinsert")
         end
@@ -114,6 +120,7 @@ vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter" }, {
     if vim.bo.buftype == "" and vim.bo.filetype ~= "neo-tree" and vim.bo.filetype ~= "NvMenu"
       and vim.api.nvim_win_get_config(0).relative == "" then
       local ide = require("config.ide")
+      if ide.main_editor and ide.main_editor ~= vim.api.nvim_get_current_win() then return end
       ide.last_editor = vim.api.nvim_get_current_win()
       vim.wo.winbar = ide.winbar()
     end

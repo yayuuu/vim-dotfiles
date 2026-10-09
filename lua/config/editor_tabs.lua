@@ -11,6 +11,7 @@ end
 
 function M.draw()
   if #api.nvim_list_uis() == 0 then return end
+  if require("config.ide").is_tool_tab() then return end
   local diff = require("config.diff").active
   if not _G.nvim_bufferline then return end
   local target, position, width
@@ -19,10 +20,12 @@ function M.draw()
   else
     local ide = require("config.ide")
     local function editor(win)
-      return valid(win) and api.nvim_win_get_config(win).relative == "" and vim.bo[api.nvim_win_get_buf(win)].buftype == ""
+      return valid(win) and api.nvim_win_get_config(win).relative == "" and ide.is_document(api.nvim_win_get_buf(win))
+        and api.nvim_win_get_tabpage(win) == api.nvim_get_current_tabpage()
         and vim.wo[win].winbar ~= ""
     end
-    if editor(api.nvim_get_current_win()) then target = api.nvim_get_current_win()
+    if editor(ide.main_editor) then target = ide.main_editor
+    elseif editor(api.nvim_get_current_win()) then target = api.nvim_get_current_win()
     elseif editor(ide.last_editor) then target = ide.last_editor
     else for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do if editor(win) then target = win; break end end end
     if not target then M.close(); return end
@@ -45,21 +48,22 @@ function M.draw()
     local items = require("bufferline.buffers").get_components(require("bufferline.state"))
     table.sort(items, require("config.tabs").compare)
     local parts = {}
-    for i, item in ipairs(items) do parts[#parts + 1] = item.component(items[i + 1]) end
+    for _, item in ipairs(items) do
+      -- Render the card body once; this strip owns the boundaries between cards.
+      parts[#parts + 1] = { id = item.id, body = item.component(nil),
+        background = require("bufferline.highlights").for_element(item).buffer }
+    end
     return parts
   end)
   local groups = {}
   for _, component in ipairs(components or {}) do
-    local id
-    for _, part in ipairs(component) do
-      if part.attr and part.attr.global then id = tonumber((part.attr.prefix or ""):match("%%(%d+)@")) end
-    end
+    local id = component.id
     if id then
       local group = { id = id, parts = {}, width = 0 }
-      for _, part in ipairs(component) do
+      for _, part in ipairs(component.body) do
         if part.text then
           local text = part.text:gsub("%%%%", "%%")
-          group.parts[#group.parts + 1] = { text = text, highlight = part.highlight,
+          group.parts[#group.parts + 1] = { text = text, highlight = part.highlight or component.background,
             close = part.attr and (part.attr.prefix or ""):find("handle_close", 1, true) ~= nil }
           group.width = group.width + vim.fn.strdisplaywidth(text)
         end
@@ -68,12 +72,22 @@ function M.draw()
     end
   end
   M.count = #groups
+  local background = api.nvim_get_hl(0, { name = "BufferLineBackground", link = false }).bg
+  local editor_background = api.nvim_get_hl(0, { name = "Normal", link = false }).bg
+    or api.nvim_get_hl(0, { name = "BufferLineBufferSelected", link = false }).bg
+  api.nvim_set_hl(0, "DesktopTabSeparator", { fg = editor_background, bg = background })
   local first = math.min(math.max(1, M.first), math.max(1, #groups))
   M.first = first
   local text, spans, hits, column, byte = "", {}, {}, 0, 0
   for i = first, #groups do
     local group = groups[i]
     if column >= width then break end
+    if i > first then
+      if column + 1 >= width then break end
+      local separator = "▌"
+      spans[#spans + 1] = { first = byte, last = byte + #separator, hl = "DesktopTabSeparator" }
+      text, column, byte = text .. separator, column + 1, byte + #separator
+    end
     for _, part in ipairs(group.parts) do
       local part_text = part.text
       while part_text ~= "" and column + vim.fn.strdisplaywidth(part_text) > width do
@@ -86,6 +100,11 @@ function M.draw()
         text, column, byte = text .. part_text, column + size, byte + #part_text
       end
     end
+  end
+  if text ~= "" and column < width then
+    local separator = "▌"
+    spans[#spans + 1] = { first = byte, last = byte + #separator, hl = "DesktopTabSeparator" }
+    text = text .. separator
   end
   M.hits = hits
   if not M.buf or not api.nvim_buf_is_valid(M.buf) then
@@ -106,7 +125,7 @@ function M.draw()
   if valid(M.win) then api.nvim_win_set_config(M.win, config)
   else M.win = api.nvim_open_win(M.buf, false, config) end
   vim.wo[M.win].winbar = ""
-  vim.wo[M.win].winhighlight = "Normal:BufferLineFill,EndOfBuffer:BufferLineFill"
+  vim.wo[M.win].winhighlight = "Normal:BufferLineBackground,EndOfBuffer:BufferLineBackground"
 end
 
 function M.refresh()
@@ -117,7 +136,8 @@ end
 
 function M.setup()
   local group = api.nvim_create_augroup("DesktopIDESharedTabs", { clear = true })
-  api.nvim_create_autocmd({ "BufEnter", "BufAdd", "BufDelete", "BufModifiedSet", "BufWritePost", "TextChanged", "TextChangedI", "WinResized", "VimResized" }, {
+  api.nvim_create_autocmd("BufWritePost", { group = group, callback = function() M.draw() end })
+  api.nvim_create_autocmd({ "ColorScheme", "TabEnter", "BufEnter", "BufAdd", "BufDelete", "BufModifiedSet", "TextChanged", "TextChangedI", "DiagnosticChanged", "WinResized", "VimResized" }, {
     group = group, callback = function(event)
       if event.buf ~= M.buf and not vim.b[event.buf].ide_hscroll then M.refresh() end
     end,
@@ -158,7 +178,10 @@ function M.setup()
             local ide = require("config.ide")
             if event.button == "Middle" or (event.button == "Left" and hit.close) then ide.close_buffer(hit.id)
             elseif event.button == "Right" then ide.tab_menu(hit.id)
-            else ide.open_file(nil, hit.id); vim.cmd("startinsert") end
+            else
+              ide.open_file(nil, hit.id)
+              if vim.bo.modifiable and vim.bo.buftype == "" then vim.cmd("startinsert") end
+            end
             M.refresh()
           end)
           break

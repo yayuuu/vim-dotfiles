@@ -3,12 +3,13 @@ import json
 import os
 from pathlib import Path
 import select
+import shutil
 import subprocess
 import tempfile
 import time
 import msgpack
 
-NVIM = '/root/.local/bin/nvim'
+NVIM = os.environ.get('NVIM_TEST_BIN', shutil.which('nvim') or 'nvim')
 
 
 class Editor:

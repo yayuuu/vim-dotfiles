@@ -41,8 +41,9 @@ action("<C-S-Tab>", function() vim.cmd("BufferLineCyclePrev") end, "Previous fil
 action("<C-PageDown>", function() vim.cmd("BufferLineCycleNext") end, "Next file")
 action("<C-PageUp>", function() vim.cmd("BufferLineCyclePrev") end, "Previous file")
 action("<C-q>", function() vim.cmd("normal gcc") end, "Toggle comment", { "n" })
-map("i", "<C-q>", "<C-o>gcc", { desc = "Toggle comment", remap = true })
+map("i", "<C-q>", "<Cmd>normal gcc<CR>", { desc = "Toggle comment" })
 map("x", "<C-q>", "gc", { desc = "Toggle comment", remap = true })
+map("s", "<C-q>", "<C-g><Cmd>normal gc<CR>", { desc = "Toggle comment" })
 action("<C-S-e>", ide.explorer, "Project explorer")
 action("<C-S-g>", ide.git_explorer, "Git changes")
 action("<M-g>", function() Snacks.lazygit({ cwd = ide.root() }) end, "Repository (LazyGit)")
@@ -52,11 +53,11 @@ action("<M-t>", ide.terminal, "Bottom terminal", { "n", "i", "t" })
 action("<F4>", ide.terminal, "Bottom terminal", { "n", "i", "t" })
 action("<F5>", function() require("dap").continue() end, "Debug: start/continue", { "n", "i" })
 action("<S-F5>", function() require("dap").terminate() end, "Debug: stop", { "n", "i" })
-action("<F9>", function() require("dap").toggle_breakpoint() end, "Debug: breakpoint", { "n", "i" })
+action("<F9>", function() require("config.breakpoints").toggle() end, "Debug: breakpoint", { "n", "i" })
 action("<F10>", function() require("dap").step_over() end, "Debug: step over", { "n", "i" })
 action("<F11>", function() require("dap").step_into() end, "Debug: step into", { "n", "i" })
 action("<S-F11>", function() require("dap").step_out() end, "Debug: step out", { "n", "i" })
-action("<M-b>", function() require("dapui").toggle() end, "Debugger panels", { "n", "i" })
+action("<M-b>", function() require("config.debugger").show() end, "Debug sidebar", { "n", "i" })
 action("<F1>", ide.help, "Shortcut guide")
 action("<F2>", function() vim.api.nvim_set_current_win(ide.editor_window());vim.lsp.buf.rename() end, "Rename symbol")
 action("<F12>", function() vim.api.nvim_set_current_win(ide.editor_window());vim.lsp.buf.definition() end, "Go to definition")
@@ -64,7 +65,8 @@ action("<S-F12>", function() vim.api.nvim_set_current_win(ide.editor_window());v
 action("<C-S-p>", function() Snacks.picker.commands() end, "Command palette")
 action("<M-p>", function() Snacks.picker.commands() end, "Command palette")
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal input" })
-map({ "n", "x", "s", "i" }, "<RightMouse>", function()
+for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
+map({ "n", "x", "s", "i" }, "<" .. prefix .. "RightMouse>", function()
   local mouse = vim.fn.getmousepos()
   if mouse.winid ~= 0 and vim.api.nvim_win_is_valid(mouse.winid)
     and mouse.winrow == 1 and vim.wo[mouse.winid].winbar ~= ""
@@ -74,6 +76,7 @@ map({ "n", "x", "s", "i" }, "<RightMouse>", function()
   vim.schedule(ide.context_menu)
   return "<Ignore>"
 end, { desc = "Context menu", expr = true })
+end
 
 -- Reliable alternatives for terminals/KVMs that cannot distinguish Ctrl+Shift.
 action("<M-e>", ide.explorer, "Project explorer")

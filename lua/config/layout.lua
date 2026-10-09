@@ -1,7 +1,7 @@
 local M = { ready = false, sizes = {}, ratios = {}, revision = 0, observed = {} }
 local path = vim.fn.stdpath("state") .. "/desktop-ide-layout.json"
-local roles = { ["neo-tree"] = "tree", aerial = "outline", snacks_terminal = "terminal",
-  ide_git_history = "history", ide_terminal_list = "terminal_list" }
+local roles = { ["neo-tree"] = "tree", aerial = "outline", snacks_terminal = "terminal", ide_terminal_empty = "terminal",
+  ["dap-repl"] = "terminal", ide_git_history = "history", ide_terminal_list = "terminal_sessions" }
 
 local function screen()
   local tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and #vim.api.nvim_list_tabpages() > 1)
@@ -18,6 +18,7 @@ local function windows()
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.api.nvim_win_get_config(win).relative == "" then
       local role = roles[vim.bo[vim.api.nvim_win_get_buf(win)].filetype]
+      if vim.b[vim.api.nvim_win_get_buf(win)].ide_problems then role = "terminal" end
       if role then result[role] = win end
     end
   end
@@ -27,7 +28,7 @@ end
 local function measure()
   local sizes = {}
   for role, win in pairs(windows()) do
-    sizes[role] = role == "tree" and vim.api.nvim_win_get_width(win) or vim.api.nvim_win_get_height(win)
+    sizes[role] = (role == "tree" or role == "terminal_sessions") and vim.api.nvim_win_get_width(win) or vim.api.nvim_win_get_height(win)
   end
   return sizes
 end
@@ -37,7 +38,7 @@ local function remember(initialize)
   for role, size in pairs(measure()) do
     M.sizes[role] = size
     if (initialize and not M.ratios[role]) or (not initialize and size ~= M.observed[role]) then
-      M.ratios[role] = size / (role == "tree" and bounds.columns or bounds.height)
+      M.ratios[role] = size / ((role == "tree" or role == "terminal_sessions") and bounds.columns or bounds.height)
     end
   end
   M.observed, M.screen = measure(), bounds
@@ -59,7 +60,7 @@ function M.load()
   -- for the first launch, then derive proportions from the current screen.
   local sizes = type(state.sizes) == "table" and state.sizes or state
   local ratios = type(state.ratios) == "table" and state.ratios or {}
-  for _, role in ipairs({ "tree", "outline", "terminal", "history", "terminal_list" }) do
+  for _, role in ipairs({ "tree", "outline", "terminal", "history", "terminal_sessions" }) do
     if type(sizes[role]) == "number" and sizes[role] >= 1 then M.sizes[role] = math.floor(sizes[role]) end
     if type(ratios[role]) == "number" and ratios[role] > 0 and ratios[role] < 1 then M.ratios[role] = ratios[role] end
   end
@@ -68,11 +69,14 @@ end
 function M.apply(role)
   local wins = windows()
   local bounds = screen()
-  for name, win in pairs(wins) do
-    local extent = name == "tree" and bounds.columns or bounds.height
+  -- Restore the sidebar first: changing its width can redistribute the bottom row.
+  -- Apply the terminal list's width after that redistribution has finished.
+  for _, name in ipairs({ "tree", "outline", "history", "terminal", "terminal_sessions" }) do
+    local win = wins[name]
+    local extent = (name == "tree" or name == "terminal_sessions") and bounds.columns or bounds.height
     local size = M.ratios[name] and math.floor(M.ratios[name] * extent + 0.5) or M.sizes[name]
-    if size and (not role or name == role) then
-      if name == "tree" then
+    if win and size and (not role or name == role) then
+      if name == "tree" or name == "terminal_sessions" then
         vim.api.nvim_win_set_width(win, math.max(1, math.min(math.max(18, size), extent - 10)))
       else
         vim.api.nvim_win_set_height(win, math.max(1, math.min(math.max(4, size), extent - 4)))

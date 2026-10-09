@@ -22,7 +22,7 @@ function M.navigate(state, path, _, callback)
   state.path, state.dirty = path or require("config.ide").root(), false
   local buffers, nodes = {}, {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.bo[buf].buflisted and (vim.bo[buf].buftype == "" or vim.b[buf].ide_diff_file)
+    if vim.bo[buf].buflisted and require("config.ide").is_document(buf)
       and not vim.b[buf].ide_diff_before then buffers[#buffers + 1] = buf end
   end
   table.sort(buffers, function(a,b) return require("config.tabs").compare({ id = a }, { id = b }) end)

@@ -2,23 +2,39 @@ local M = {}
 function M.root()
   return vim.g.ide_project_dir or LazyVim.root()
 end
+function M.is_tool_tab(tab)
+  local diffview = package.loaded["diffview.lib"]
+  return diffview and diffview.tabpage_to_view(tab or vim.api.nvim_get_current_tabpage()) ~= nil or false
+end
+function M.is_document(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or vim.b[buf].ide_diff_before then return false end
+  if vim.api.nvim_buf_get_name(buf):match("^diffview://") then return false end
+  local kind, ft = vim.bo[buf].buftype, vim.bo[buf].filetype
+  return kind == "" or kind == "help" or ft == "checkhealth" or vim.b[buf].ide_diff_file ~= nil
+end
 function M.editor_window()
   local diff = package.loaded["config.diff"]
-  if diff and diff.active and vim.api.nvim_win_is_valid(diff.active.right) then return diff.active.right end
+  if diff and diff.active and vim.api.nvim_win_is_valid(diff.active.right)
+    and vim.api.nvim_win_get_tabpage(diff.active.right) == vim.api.nvim_get_current_tabpage() then return diff.active.right end
   local function editor(win)
     if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_config(win).relative ~= "" then return false end
+    if vim.api.nvim_win_get_tabpage(win) ~= vim.api.nvim_get_current_tabpage() then return false end
     local buf = vim.api.nvim_win_get_buf(win)
-    return (vim.bo[buf].buftype == "" or vim.b[buf].ide_diff_file) and not vim.b[buf].ide_diff_before
+    return M.is_document(buf)
       and vim.bo[buf].filetype ~= "neo-tree" and vim.bo[buf].filetype ~= "NvMenu"
   end
+  local function remember(win) M.main_editor = win; return win end
+  if M.main_editor and editor(M.main_editor) and vim.api.nvim_win_get_tabpage(M.main_editor) == vim.api.nvim_get_current_tabpage() then
+    return M.main_editor
+  end
   local current = vim.api.nvim_get_current_win()
-  if editor(current) then return current end
-  if M.last_editor and editor(M.last_editor) then return M.last_editor end
+  if editor(current) then return remember(current) end
+  if M.last_editor and editor(M.last_editor) then return remember(M.last_editor) end
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if editor(win) then return win end
+    if editor(win) then return remember(win) end
   end
   vim.cmd("vnew")
-  return vim.api.nvim_get_current_win()
+  return remember(vim.api.nvim_get_current_win())
 end
 function M.discard_empty_buffers()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -34,7 +50,7 @@ function M.open_file(path, buf)
   -- Neo-tree passes -1 when the file does not have a buffer yet.
   if buf and (buf < 1 or not vim.api.nvim_buf_is_valid(buf)) then buf = nil end
   if buf and vim.bo[buf].buftype == "terminal" then
-    require("config.sidebar").show_terminal(buf)
+    require("config.terminals").show(buf)
     return
   end
   local diff = require("config.diff")
@@ -47,6 +63,7 @@ function M.open_file(path, buf)
   -- bufadd/bufload alone leave files unlisted, so the tab strip cannot see them.
   vim.bo[buf].buflisted = true
   vim.cmd("buffer " .. buf)
+  if not vim.bo[buf].modifiable then vim.cmd("stopinsert") end
   require("config.tabs").activate(buf)
   M.discard_empty_buffers()
   vim.wo.winbar = M.winbar()
@@ -77,7 +94,7 @@ function M.open_project(path)
   local editor = M.editor_window()
   projects.begin(path)
   require("config.diff").hide_tabs()
-  for _, terminal in ipairs(Snacks.terminal.list()) do terminal:hide() end
+  require("config.terminals").hide()
   vim.cmd("cd " .. vim.fn.fnameescape(path))
   vim.g.ide_project_dir = path
   require("config.git").set_root(path)
@@ -121,7 +138,12 @@ end
 function M.new_file()
   require("config.diff").leave()
   vim.api.nvim_set_current_win(M.editor_window())
-  vim.cmd("enew")
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.bo[buf].bufhidden = "hide"
+  vim.api.nvim_win_set_buf(M.editor_window(), buf)
+  require("config.tabs").activate(buf)
+  vim.wo.winbar = M.winbar()
+  require("config.editor_tabs").draw()
   vim.cmd("startinsert")
 end
 function M.save_buffer(buf, rename, done)
@@ -133,7 +155,8 @@ function M.save_buffer(buf, rename, done)
     local ok, err = pcall(vim.api.nvim_buf_call, buf, function()
       vim.cmd(path and ("saveas " .. vim.fn.fnameescape(path)) or "write")
     end)
-    if not ok then vim.notify(err, vim.log.levels.ERROR) end
+    if ok then require("config.editor_tabs").draw()
+    else vim.notify(err, vim.log.levels.ERROR) end
     if done then done(ok) end
   end
   if rename or vim.api.nvim_buf_get_name(buf) == "" then
@@ -286,7 +309,10 @@ function M.goto_line()
   end)
 end
 function M.explorer()
-  require("neo-tree.command").execute({ source = "filesystem", toggle = true, dir = M.root() })
+  if M.is_tool_tab() and M.main_editor and vim.api.nvim_win_is_valid(M.main_editor) then
+    vim.api.nvim_set_current_win(M.main_editor)
+  end
+  require("neo-tree.command").execute({ source = "filesystem", action = "focus", dir = M.root() })
   require("config.layout").reflow()
 end
 function M.tree_click()
@@ -323,24 +349,13 @@ function M.git_explorer()
   require("config.layout").reflow()
 end
 function M.terminal(options)
-  local opts = vim.tbl_deep_extend("force", {
-    cwd = M.root(), win = { position = "bottom", relative = "win", win = M.editor_window(), height = 0.25, stack = false, resize = false },
-  }, options or {})
-  Snacks.terminal.toggle(nil, opts)
-  require("config.layout").reflow()
+  require("config.terminals").toggle(options)
 end
 function M.new_terminal()
-  local id = 1
-  for _, terminal in ipairs(Snacks.terminal.list()) do
-    if terminal.buf and vim.api.nvim_buf_is_valid(terminal.buf) then
-      local info = vim.b[terminal.buf].snacks_terminal
-      if info then id = math.max(id, info.id + 1) end
-    end
-  end
-  M.terminal({ count = id, start_insert = true })
+  require("config.terminals").new()
 end
 function M.help()
-  vim.cmd("split " .. vim.fn.fnameescape(vim.fn.stdpath("config") .. "/SKROTY.md"))
+  M.open_file(vim.fn.stdpath("config") .. "/KEYBINDS.md")
 end
 function M.popup(items)
   require("menu.utils").delete_old_menus()
@@ -372,10 +387,16 @@ function M.popup(items)
   require("menu").open(items, { mouse = false, border = true })
   local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
   vim.wo[win].winbar = ""
+  -- Mouse focus/repeated clicks can preserve Insert or selection mode.
+  -- Volt feeds q to dismiss; use its existing close action in these modes too.
+  local close_menu = vim.fn.maparg("q", "n", false, true).callback
+  if close_menu then
+    vim.keymap.set({ "i", "x", "s" }, "q", close_menu, { buffer = buf, silent = true })
+  end
   for _, item in ipairs(items) do
     if item.cmd and item.rtxt then
       local key = item.rtxt:gsub("Ctrl", "C"):gsub("Shift", "S"):gsub("Alt", "M"):gsub("%+", "-")
-      vim.keymap.set("n", "<" .. key .. ">", function()
+      vim.keymap.set("n", #key == 1 and key or "<" .. key .. ">", function()
         require("menu.utils").delete_old_menus()
         item.cmd()
       end, { buffer = buf, desc = item.name })
@@ -430,6 +451,12 @@ function M.popup(items)
 end
 function M.context_menu()
   if vim.bo.filetype == "NvMenu" then return end
+  local debugger = package.loaded["config.debugger_mouse"]
+  local pointer = vim.fn.getmousepos()
+  if debugger and debugger.handles(pointer.winid) then
+    debugger.context_menu(pointer.winid, pointer.line)
+    return
+  end
   local selection = capture_selection()
   local mouse = vim.fn.getmousepos()
   if not selection and mouse.winid ~= 0 and vim.api.nvim_win_is_valid(mouse.winid) then
@@ -450,6 +477,8 @@ function M.context_menu()
   local items
   if vim.bo.filetype == "neo-tree" then
     local state = require("neo-tree.sources.manager").get_state_for_window(vim.api.nvim_get_current_win())
+    local node = state and state.tree and state.tree:get_node()
+    if not state or (node and node.type == "message") then return end
     if state.name == "projects" then
       M.popup({ { name = "Open project", cmd = function() state.commands.open(state) end } })
       return
@@ -463,7 +492,7 @@ function M.context_menu()
     end
     local commands = require("neo-tree.sources." .. state.name .. ".commands")
     items = {
-      { name = "Open", cmd = function() commands.open(state) end },
+      { name = "Open", cmd = function() state.commands.open(state) end },
       { name = "New file", cmd = function() commands.add(state) end },
       { name = "New directory", cmd = function() commands.add_directory(state) end },
       { name = "Rename", cmd = function() commands.rename(state) end },
@@ -490,13 +519,14 @@ function M.context_menu()
       { name = "Code actions", cmd = vim.lsp.buf.code_action },
       { name = "Format", cmd = function() require("conform").format({ lsp_fallback = true }) end },
       { name = "separator" },
-      { name = "Toggle breakpoint", rtxt = "F9", cmd = function() require("dap").toggle_breakpoint() end },
+      { name = "Toggle breakpoint", rtxt = "F9", cmd = function() require("config.breakpoints").toggle() end },
       { name = "Terminal", rtxt = "Alt+T", cmd = M.terminal },
     }
   end
   M.popup(items)
 end
 function M.outline()
+  if M.is_tool_tab() then return end
   if not require("config.sidebar").symbols_enabled() then return end
   if M.outline_busy or #vim.api.nvim_list_uis() == 0 then return end
   local previous = vim.api.nvim_get_current_win()
@@ -572,10 +602,10 @@ function M.menu(name)
     },
     View = {
       item("Project files", M.explorer, "Alt+E"), item("Git changes", M.git_explorer, "Alt+R"),
-      item("Terminal", M.terminal, "Alt+T"), item("Debugger", function() require("dapui").toggle() end, "Alt+B"),
+      item("Terminal", M.terminal, "Alt+T"), item("Debugger", function() require("config.debugger").show() end, "Alt+B"),
       item("Functions / symbols", M.outline),
       item("Toggle code minimap", function() vim.cmd("Neominimap Toggle") end),
-      item("Problems", cmd("Trouble diagnostics toggle")),
+      item("Problems", function() require("config.problems").open() end),
       item("Toggle word wrap", function() vim.wo.wrap = not vim.wo.wrap end),
       item("Toggle line numbers", function() vim.wo.number = not vim.wo.number end),
     },
@@ -596,10 +626,10 @@ function M.menu(name)
     },
     Debug = {
       item("Start / continue", dap("continue"), "F5"), item("Stop", dap("terminate"), "Shift+F5"),
-      item("Toggle breakpoint", dap("toggle_breakpoint"), "F9"),
+      item("Toggle breakpoint", function() require("config.breakpoints").toggle() end, "F9"),
       item("Conditional breakpoint...", function() require("dap").set_breakpoint(vim.fn.input("Condition: ")) end),
       item("Step over", dap("step_over"), "F10"), item("Step into", dap("step_into"), "F11"), item("Step out", dap("step_out"), "Shift+F11"),
-      item("Debugger panels", function() require("dapui").toggle() end, "Alt+B"),
+      item("Debugger panels", function() require("config.debugger").show() end, "Alt+B"),
       item("Evaluate expression", function() require("dapui").eval() end),
     },
     Terminal = { item("Show / hide", M.terminal, "Alt+T"), item("New terminal", M.new_terminal) },

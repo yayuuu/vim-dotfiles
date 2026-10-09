@@ -428,10 +428,12 @@ function M.align(state)
   M.aligning = true
   vim.api.nvim_win_call(state.winid, function()
     local cursor = vim.api.nvim_win_get_cursor(0)
-    if cursor[2] ~= 0 then vim.api.nvim_win_set_cursor(0, { cursor[1], 0 }) end
-    vim.wo.sidescrolloff = 0
     local view = vim.fn.winsaveview()
-    view.leftcol, view.skipcol = 0, 0
+    if view.leftcol == 0 and cursor[2] ~= 0 then
+      vim.api.nvim_win_set_cursor(0, { cursor[1], 0 }); view.col = 0
+    end
+    vim.wo.sidescrolloff = 0
+    view.skipcol = 0
     vim.fn.winrestview(view)
   end)
   M.aligning = false

@@ -88,6 +88,7 @@ function M.show(buf)
   if M.active and M.active.buf == buf and winvalid(M.active.left) and winvalid(M.active.right) then
     vim.api.nvim_set_current_win(M.active.right)
     require("config.tabs").activate(buf)
+    require("config.hscroll").refresh()
     return
   end
   M.leave()
@@ -137,6 +138,7 @@ function M.show(buf)
   vim.cmd("diffupdate")
   vim.cmd("redrawstatus")
   require("config.editor_tabs").refresh()
+  require("config.hscroll").refresh()
 end
 
 function M.hunks(buf)
@@ -182,9 +184,13 @@ function M.open(path)
   -- reported instead of silently presenting a fabricated empty baseline.
   if baseline.code ~= 0 then
     local exists = vim.system({ "git", "-C", vim.trim(root.stdout), "cat-file", "-e", "HEAD" }):wait()
-    if exists.code == 0 and not (baseline.stderr or ""):find("does not exist", 1, true)
-      and not (baseline.stderr or ""):find("exists on disk, but not in", 1, true) then
-      vim.notify(baseline.stderr or "Cannot read Git baseline", vim.log.levels.ERROR); return
+    if exists.code == 0 then
+      -- Inspect the tree instead of matching localized Git error messages.
+      local entry = vim.system({ "git", "--literal-pathspecs", "-C", vim.trim(root.stdout),
+        "ls-tree", "-z", "HEAD", "--", relative }, { text = true }):wait()
+      if entry.code ~= 0 or entry.stdout ~= "" then
+        vim.notify(baseline.stderr or "Cannot read Git baseline", vim.log.levels.ERROR); return
+      end
     end
   end
   local text = baseline.code == 0 and baseline.stdout or ""
@@ -237,9 +243,11 @@ function M.open(path)
     M.sync(entry)
     vim.api.nvim_buf_call(filebuf, function() vim.cmd("write") end)
     vim.bo[buf].modified = false
+    require("config.editor_tabs").draw()
   end })
   vim.api.nvim_create_autocmd("BufWritePost", { buffer = filebuf, callback = function()
     M.sync(entry, filebuf)
+    require("config.editor_tabs").draw()
   end })
   vim.api.nvim_create_autocmd("BufWipeout", { buffer = buf, once = true, callback = function()
     M.flush()
@@ -266,15 +274,36 @@ end
 function M.setup()
   colors()
   local group = vim.api.nvim_create_augroup("DesktopIDEDiff", { clear = true })
+  local releases = {}
+  for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
+    releases[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
+  end
+  vim.on_key(function(key, typed)
+    if not releases[typed] and not releases[key] then return end
+    local active, mouse = M.active, vim.fn.getmousepos()
+    if M.busy or not active or not winvalid(active.right) or mouse.winid ~= active.right
+      or mouse.line < 1 or mouse.winrow < 1 then return end
+    local info = vim.fn.getwininfo(active.right)[1]
+    if not info or mouse.wincol <= info.textoff then return end
+    vim.schedule(function()
+      if not M.busy and M.active == active and winvalid(active.right)
+        and vim.api.nvim_get_current_win() == active.right
+        and vim.api.nvim_win_get_buf(active.right) == active.buf
+        and vim.bo[active.buf].modifiable and vim.fn.mode() == "n" then
+        vim.cmd("startinsert")
+      end
+    end)
+  end, vim.api.nvim_create_namespace("DesktopDiffInputMouse"))
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = colors })
   vim.api.nvim_create_autocmd("BufEnter", { group = group, callback = function(event)
-    if M.busy then return end
+    if M.busy or require("config.ide").is_tool_tab() then return end
     local win, buf = vim.api.nvim_get_current_win(), event.buf
     if vim.api.nvim_win_get_config(win).relative ~= "" then return end
     if not M.entries[buf] and (not M.active or (win ~= M.active.right and win ~= M.active.left)
       or vim.bo[buf].buftype ~= "") then return end
     vim.schedule(function()
-      if M.busy or not winvalid(win) or vim.api.nvim_win_get_buf(win) ~= buf then return end
+      if M.busy or not winvalid(win) or vim.api.nvim_win_get_buf(win) ~= buf
+        or require("config.ide").is_tool_tab(vim.api.nvim_win_get_tabpage(win)) then return end
       if M.entries[buf] then M.show(buf)
       elseif M.active and not vim.b[buf].ide_diff_before then
         local right = M.active.right

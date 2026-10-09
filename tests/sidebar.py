@@ -36,9 +36,11 @@ with tempfile.TemporaryDirectory(prefix='nvim-sidebar-') as directory:
             editor.wait(lambda:current()==source, label+' source click')
             editor.wait(lambda:not editor.lua('return require("config.sidebar").changing or require("config.sidebar").pending or require("config.layout").scaling'), label+' panels settle')
         assert current() == 'projects', current()
-        assert 'aerial' not in panels() and 'ide_git_history' not in panels() and 'ide_terminal_list' not in panels()
+        assert 'aerial' not in panels() and 'ide_git_history' not in panels()
+        assert 'ide_terminal_list' in panels()
         order = editor.lua('local s,w=require("config.sidebar").state();return vim.api.nvim_eval_statusline(vim.wo[w].winbar,{winid=w,use_winbar=true}).str')
-        assert order.index('Projects') < order.index('Files') < order.index('Git') < order.index('Tabs'), order
+        assert order.startswith(' '), order
+        assert order.index('Projects') < order.index('Files') < order.index('Debug') < order.index('Git') < order.index('Tabs'), order
         editor.lua('require("config.ide").open_project(...);require("config.ide").open_file(select(2,...));vim.cmd("stopinsert")', str(repo), str(source))
         editor.wait(lambda:current()=='filesystem' and 'aerial' in panels(), 'Files and symbols after opening project')
         editor.wait(lambda:not editor.lua('return require("config.sidebar").changing or require("config.layout").scaling'), 'Opening project settles')
@@ -59,19 +61,19 @@ with tempfile.TemporaryDirectory(prefix='nvim-sidebar-') as directory:
         assert 'HEAD' in graph[0] and 'Baseline' in graph[0], graph
         tab('Tabs','buffers')
         assert 'aerial' not in panels() and 'ide_git_history' not in panels()
-        editor.wait(lambda:'ide_terminal_list' in panels(), 'Tabs terminal list replaces graph')
+        editor.wait(lambda:'ide_terminal_list' in panels(), 'Terminal list remains in bottom panel')
         docs = editor.lua('local s=require("neo-tree.sources.manager").get_state("buffers");return vim.api.nvim_buf_get_lines(s.bufnr,0,-1,false)')
         assert not any('bash' in row or 'TERMINALS' in row for row in docs), docs
-        terminalbuf = editor.lua('return require("config.sidebar").terminals[1]')
+        terminalbuf = editor.lua('return require("config.terminals").items[1].buf')
         assert terminalbuf
-        position = editor.lua('local w=require("config.sidebar").terminal_win;local p=vim.api.nvim_win_get_position(w);return {p[1]+1,p[2]+4}')
+        position = editor.lua('local w=require("config.terminals").list_win;local p=vim.api.nvim_win_get_position(w);return {p[1]+2,p[2]+4}')
         editor.click(*position)
         editor.wait(lambda:editor.lua('return vim.api.nvim_get_current_buf()')==terminalbuf, 'Click terminal focuses its bottom split')
         assert editor.lua('return vim.api.nvim_win_get_buf(require("config.ide").editor_window())')==filebuf, 'Terminal must not replace document'
         assert editor.lua('local p=vim.api.nvim_win_get_position(require("config.ide").editor_window());'
                           'local t=vim.api.nvim_win_get_position(vim.fn.win_findbuf(...)[1]);return t[1]>p[1] and t[2]==p[2]',terminalbuf)
         tab('Projects','projects')
-        assert not any(ft in panels() for ft in ['aerial','ide_git_history','ide_terminal_list'])
+        assert not any(ft in panels() for ft in ['aerial','ide_git_history'])
         tab('Files','filesystem')
         editor.wait(lambda:'aerial' in panels(), 'Files restores symbols')
         assert editor.lua('local s,w=require("config.sidebar").state();return vim.api.nvim_win_get_width(w)')==width, ('Sidebar width survives every source switch', width, editor.lua('local s,w=require("config.sidebar").state();return {width=vim.api.nvim_win_get_width(w),sizes=require("config.layout").sizes,ratios=require("config.layout").ratios}'))
