@@ -619,6 +619,7 @@ function M.menu(name)
       item("Repository", function() Snacks.lazygit({ cwd = M.root() }) end, "Alt+G"),
       item("Refresh status", function() require("config.git").refresh() end),
       item("Switch branch...", function() require("config.git").branches() end),
+      item("Merge branch...", function() require("config.git_commands").merge() end),
       item("Changed files", M.git_explorer, "Alt+R"), item("Diff view", cmd("DiffviewOpen"), "Alt+D"),
       item("File history", cmd("DiffviewFileHistory %")), item("Project history", cmd("DiffviewFileHistory")),
       item("Blame current line", function() require("gitsigns").blame_line({ full = true }) end),

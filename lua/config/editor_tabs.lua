@@ -34,7 +34,9 @@ function M.draw()
   if diff then
   local hunks = require("config.diff").hunks()
   local buttons = "[↑ Previous] [Next ↓] "
-  local label = " HEAD → Working tree  ·  " .. #hunks .. " changes"
+  local entry = require("config.diff").entries[diff.buf]
+  local baseline = entry.baseline == "index" and "Staged" or "HEAD"
+  local label = " " .. baseline .. " → Working tree  ·  " .. #hunks .. " changes"
   while vim.fn.strdisplaywidth(label) > math.max(0, width - #buttons) do label = vim.fn.strcharpart(label, 0, vim.fn.strchars(label) - 1) end
   local button_width = vim.fn.strdisplaywidth(buttons)
   local toolbar_text = label .. string.rep(" ", math.max(0, width - vim.fn.strdisplaywidth(label) - button_width)) .. buttons
@@ -73,8 +75,12 @@ function M.draw()
   end
   M.count = #groups
   local background = api.nvim_get_hl(0, { name = "BufferLineBackground", link = false }).bg
-  local editor_background = api.nvim_get_hl(0, { name = "Normal", link = false }).bg
-    or api.nvim_get_hl(0, { name = "BufferLineBufferSelected", link = false }).bg
+  -- Normal follows the current window's winhighlight mapping. Resolve it in
+  -- the editor, even when focus is in the commit input or another tool.
+  local editor_background = api.nvim_win_call(target, function()
+    return api.nvim_get_hl(0, { name = "Normal", link = false }).bg
+      or api.nvim_get_hl(0, { name = "BufferLineBufferSelected", link = false }).bg
+  end)
   api.nvim_set_hl(0, "DesktopTabSeparator", { fg = editor_background, bg = background })
   local first = math.min(math.max(1, M.first), math.max(1, #groups))
   M.first = first

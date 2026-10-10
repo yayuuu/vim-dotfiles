@@ -102,7 +102,7 @@ function M.refresh_history()
         for _, row in ipairs(vim.split(vim.trim(result.stdout), "\n", { plain = true, trimempty = true })) do
           local prefix, refs, subject, hash = row:match("^(.-)\t(.-)\t(.-)\t(%x+)$")
           text[#text + 1] = prefix and (prefix .. refs .. " " .. subject) or row
-          if hash then commits[#text] = { commit = hash, text = subject, root = root } end
+          if hash then commits[#text] = { commit = hash, text = subject, msg = subject, root = root } end
         end
       else
         local repo = (result.stderr or ""):find("not a git repository", 1, true)

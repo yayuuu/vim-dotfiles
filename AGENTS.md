@@ -65,6 +65,8 @@ or perform operations on the user's actual repositories independently.
   The separator is a one-column **▌** (`vhalf`) character in the editor background color,
   placed between tabs and after the last tab when it fits in the viewport. Do not add it
   before × or after W 1, W 2, etc. Spaces inside a tab use that tab's background.
+- Resolve separator colors in the editor window's highlight context. Focusing
+  Commit message or another tool must not make separators inherit that tool's background.
 - After a successful save, immediately remove the unsaved-change marker, including
   from both representations of a file in a diff. Keep the marker if saving fails.
 - Closing a modified document offers Save / Don't save / Cancel;
@@ -155,6 +157,11 @@ or perform operations on the user's actual repositories independently.
   both columns; Previous / Next buttons are below it.
 - Compare files absent from HEAD against an empty side. Check the Git tree instead
   of error text. Do not hide other errors, such as failures to read the repository.
+- If a file appears in both Changes and Staged Changes, opening it from Changes
+  compares the working version (including unsaved edits) against the Git index.
+  Label this baseline Staged. Other entries retain their HEAD comparison.
+  Mouse clicks, Enter, and Open diff in the context menu use the same rule.
+  Switching baselines reuses the document card without losing edits.
 - Synchronize unsaved changes between the ordinary tab and diff proxy. Saving
   writes the actual file, and closing a diff preserves its changes.
 - Additions are green, deletions red, and changes orange, including on the minimap.
@@ -171,6 +178,9 @@ or perform operations on the user's actual repositories independently.
   repeated switching must not color unchanged lines.
 - Project history / File history preserve a separate Diffview view and one history
   panel. `:DiffviewClose` returns to the previous tab without destroying its layout.
+- Clicking a commit in the sidebar graph opens its message and patch in a picker.
+  Custom items using Snacks' `git_log` formatter must provide `msg` as well as
+  `commit` and searchable `text`; closing the picker preserves panels and unsaved edits.
 - Staged Changes and Changes are separate and initially expanded. Shift+click
   selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
@@ -183,6 +193,14 @@ or perform operations on the user's actual repositories independently.
   button performs fetch, pull according to Git settings, and push; errors/conflicts
   stop subsequent steps. Do not duplicate synchronization. `vim.g.ide_git_autofetch=false`
   disables background fetch. Switching branches also refreshes Files and the status bar.
+- Ex commands registered by `git_commands.lua` expose Git actions in the ordinary
+  Ctrl+Shift+P / Alt+P command palette. Keep actions shared with menus where applicable.
+  `GitMerge` selects a local/remote branch to merge into the current branch; it
+  must not switch branches or run anything when selection is canceled. Also accept
+  an explicit branch argument. `GitMergeAbort` aborts a merge. Refresh status after
+  success and failure, including conflicts, while preserving unsaved editor buffers.
+  GitFetch/Pull/Push use ordinary Git settings without forcing changes; GitSync
+  reuses the existing synchronization action. GitCommit focuses the message field.
 
 ## Dialogs, pickers, and minimap
 
@@ -209,7 +227,7 @@ or perform operations on the user's actual repositories independently.
 | `projects.lua`, `project_source.lua` | Project history and tab restoration |
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
-| `git.lua`, `git_source.lua`, `git_sync.lua`, `diff.lua` | Status, Git operations, upstream, and editable diff |
+| `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `hscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
@@ -248,13 +266,14 @@ Run a single scenario:
   Distinguish environment restrictions from UI behavior bugs.
   Do not test Git operations on the user's repository.
 - Choose scenarios relevant to the change: tabs → `editor_controls.py`,
-  `editor_tab_separators.py`, `save_markers.py`; diff → `diff.py`, `diff_input.py`,
+  `editor_tab_separators.py`, `tab_focus_colors.py`, `save_markers.py`; diff → `diff.py`, `diff_input.py`,
   `breakpoint_mouse.py`, `diff_scrollbar.py`, `binary_diff_scrollbar.py`,
-  `hscroll_recovery.py`;
+  `hscroll_recovery.py`, `staged_diff.py`;
   terminal/Problems → `terminal_input.py`, `panels.py`,
   `debugger_panels.py`; debugger → `debugger_mouse.py`; left panel/projects →
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
-  `documents.py`, `git_history_view.py`, `picker_layout.py`, `popup_resize.py`;
+  `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `picker_layout.py`, `popup_resize.py`;
+  Git command palette and merging → `git_commands.py`;
   editing → `comment_selection.py`; document creation → `new_file.py`;
   informational tree rows → `tree_messages.py`.
 - Check visible behavior and actual gestures. For regressions, consider a test

@@ -86,8 +86,18 @@ File > Open folder opens a project. Terminal > New terminal creates a session.
 R / F5 in the Git panel refreshes the status. Shift+click selects a range of files,
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard
 and Commit are available in the Git panel and its menu. Discard requires confirmation.
+When a file appears in both groups, opening it from Changes compares against its staged version.
 Click the branch name to select a branch; the `[↑… ↓…]` button synchronizes
 the repository through fetch, pull, and push.
+
+The command palette (Ctrl+Shift+P / Alt+P) includes Git commands. Search for `Git`:
+`GitStatus`, `GitRefresh`, `GitSwitchBranch`, `GitMerge`, `GitMergeAbort`,
+`GitFetch`, `GitPull`, `GitPush`, `GitSync`, `GitCommit`, `GitDiff`,
+`GitFileHistory`, `GitProjectHistory`, `GitBlame`, and `GitStageHunk`.
+Selecting a command places it on the command line; press Enter to run it.
+`GitMerge` opens a branch picker and merges the selected branch into the current one.
+You can also run `:GitMerge branch-name` or choose Git > Merge branch in the menu.
+`GitCommit` focuses the commit message field; Enter there commits staged changes.
 
 ## Debugger
 

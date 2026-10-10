@@ -86,11 +86,16 @@ function M.targets(state, node, action)
   return result
 end
 
+function M.open_diff(state, node)
+  local staged = node.extra.section == "changes" and state.tree:get_node(node.path .. "::staged")
+  require("config.diff").open(node.path, { baseline = staged and "index" or "HEAD" })
+end
+
 function M.menu(state, node)
   M.select(state, node, false, true)
   local items = {}
   if node and node.type == "file" then
-    items[#items + 1] = { name = "Open diff", cmd = function() require("config.diff").open(node.path) end }
+    items[#items + 1] = { name = "Open diff", cmd = function() M.open_diff(state, node) end }
     local staged = node.extra.section == "staged"
     local actions = staged and { { "unstage", "Unstage Changes" } }
       or { { "stage", "Stage Changes" }, { "discard", "Discard Changes…" } }
@@ -275,7 +280,7 @@ end
 
 function M.open(state)
   local node = state.tree and state.tree:get_node()
-  if node and node.type == "file" then require("config.diff").open(node.path)
+  if node and node.type == "file" then M.open_diff(state, node)
   elseif node and node.type == "git_commit" then M.input(state, true)
   elseif node and node.type == "git_commit_action" then M.commit(state)
   elseif node and node.type == "git_section" then

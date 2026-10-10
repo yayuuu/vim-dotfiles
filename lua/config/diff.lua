@@ -174,15 +174,23 @@ function M.jump(direction)
   vim.cmd("syncbind")
 end
 
-function M.open(path)
+function M.open(path, opts)
   path = vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
   local root = vim.system({ "git", "-C", vim.fn.fnamemodify(path, ":h"), "rev-parse", "--show-toplevel" }, { text = true }):wait()
   if root.code ~= 0 then vim.notify("This file is not in a Git repository", vim.log.levels.WARN); return end
   local relative = path:sub(#vim.trim(root.stdout) + 2)
-  local baseline = vim.system({ "git", "-C", vim.trim(root.stdout), "show", "HEAD:" .. relative }, { text = true }):wait()
+  local kind = opts and opts.baseline == "index" and "index" or "HEAD"
+  local revision = (kind == "index" and ":" or "HEAD:") .. relative
+  local baseline = vim.system({ "git", "-C", vim.trim(root.stdout), "show", revision }, { text = true }):wait()
   -- Missing HEAD entry is normal for added/untracked files. Other errors are
   -- reported instead of silently presenting a fabricated empty baseline.
-  if baseline.code ~= 0 then
+  if baseline.code ~= 0 and kind == "index" then
+    local entry = vim.system({ "git", "--literal-pathspecs", "-C", vim.trim(root.stdout),
+      "ls-files", "--stage", "-z", "--", relative }, { text = true }):wait()
+    if entry.code ~= 0 or entry.stdout ~= "" then
+      vim.notify(baseline.stderr or "Cannot read Git baseline", vim.log.levels.ERROR); return
+    end
+  elseif baseline.code ~= 0 then
     local exists = vim.system({ "git", "-C", vim.trim(root.stdout), "cat-file", "-e", "HEAD" }):wait()
     if exists.code == 0 then
       -- Inspect the tree instead of matching localized Git error messages.
@@ -208,12 +216,14 @@ function M.open(path)
   end
   if valid(M.paths[path]) then
     local entry = M.entries[M.paths[path]]
+    entry.baseline = kind
     vim.bo[entry.before].modifiable = true
     vim.api.nvim_buf_set_lines(entry.before, 0, -1, false, lines)
     vim.bo[entry.before].modified = false
     vim.bo[entry.before].modifiable = false
     M.show(entry.buf)
     vim.cmd("diffupdate")
+    require("config.editor_tabs").refresh()
     return
   end
   vim.bo[filebuf].buflisted = true
@@ -232,7 +242,7 @@ function M.open(path)
   vim.bo[buf].swapfile = false
   vim.bo[buf].bufhidden = "hide"
   vim.b[buf].ide_diff_file = path
-  local entry = { buf = buf, before = before, filebuf = filebuf, path = path }
+  local entry = { buf = buf, before = before, filebuf = filebuf, path = path, baseline = kind }
   M.entries[buf], M.paths[path] = entry, buf
   copy(filebuf, buf)
   vim.bo[buf].filetype = vim.bo[filebuf].filetype
