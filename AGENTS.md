@@ -49,6 +49,9 @@ or perform operations on the user's actual repositories independently.
   enlarging the window restores the chosen proportions. Account for window roles
   and the order of width changes, especially for the tree and terminal list.
 - Delayed rendering of the previous tab must not replace the newly selected tab.
+- Creating Symbols may close the previously focused dialog. Restore focus only
+  if that window still exists; avoid automatic window restoration around Aerial.open
+  that can target a closed window or leave focus in the Symbols panel.
 
 ## Tabs above the editor
 
@@ -181,6 +184,14 @@ or perform operations on the user's actual repositories independently.
 - Clicking a commit in the sidebar graph opens its message and patch in a picker.
   Custom items using Snacks' `git_log` formatter must provide `msg` as well as
   `commit` and searchable `text`; closing the picker preserves panels and unsaved edits.
+- Long commit previews have a vertical scrollbar on the right preview border.
+  Support track clicks, thumb dragging, and the wheel without stealing input focus.
+  Measure screen lines, including wrapped text and virtual lines; follow scrolling
+  and resizing, hide the scrollbar when content fits, and remove it with the picker.
+  Capture the entire drag through release, including outside the popup. Releasing
+  over a terminal entry, tab, or close button must not activate that control.
+  Other mouse listeners and release mappings must honor the capture; clear it
+  after all handlers for the release event have finished.
 - Staged Changes and Changes are separate and initially expanded. Shift+click
   selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
@@ -228,7 +239,8 @@ or perform operations on the user's actual repositories independently.
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
-| `hscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
+| `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
+| `mouse_capture.lua` | Shared mouse gesture ownership for dragged widgets |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
 | `tests/ui.py`, `tests/*.py`, `tests.sh` | UI/RPC client and regression scenarios |
@@ -272,7 +284,8 @@ Run a single scenario:
   terminal/Problems → `terminal_input.py`, `panels.py`,
   `debugger_panels.py`; debugger → `debugger_mouse.py`; left panel/projects →
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
-  `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `picker_layout.py`, `popup_resize.py`;
+  `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `commit_scrollbar.py`,
+  `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`;
   editing → `comment_selection.py`; document creation → `new_file.py`;
   informational tree rows → `tree_messages.py`.

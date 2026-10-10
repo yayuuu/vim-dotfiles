@@ -316,6 +316,7 @@ function M.explorer()
   require("config.layout").reflow()
 end
 function M.tree_click()
+  if require("config.mouse_capture").active() then return end
   if M.menu_mouse_pending or require("config.git").selection_mouse_pending then return end
   local mouse = vim.fn.getmousepos()
   local win = mouse.winid
@@ -419,6 +420,7 @@ function M.popup(items)
     releases[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
   end
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     if presses[typed] or presses[key] then
       local mouse = vim.fn.getmousepos()
       -- Volt may have already closed the popup in its own on_key listener.
@@ -547,7 +549,11 @@ function M.outline()
   end
   M.outline_busy = true
   local ok, err = pcall(function()
-    vim.api.nvim_win_call(editor, function() require("aerial").open({ focus = false, direction = "left" }) end)
+    -- Aerial can close the previously focused dialog while opening Symbols.
+    -- Restore focus explicitly below, checking validity, rather than letting
+    -- win_call restore a window that may no longer exist.
+    vim.api.nvim_set_current_win(editor)
+    require("aerial").open({ focus = false, direction = "left" })
     for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
       if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "aerial" then
         local pos, treepos = vim.api.nvim_win_get_position(win), vim.api.nvim_win_get_position(tree)

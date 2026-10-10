@@ -124,6 +124,7 @@ function M.setup()
     events[vim.keycode("<C-" .. prefix .. "LeftMouse>")] = "Toggle"
   end
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     local kind = events[typed] or events[key]
     if not kind then return end
     if kind == "Reset" then M.selection_mouse_pending = nil; return end
@@ -256,6 +257,7 @@ function M.directory(_, node, state, remaining_width)
 end
 
 function M.click(state, mouse)
+  if require("config.mouse_capture").active() then return end
   if M.selection_mouse_pending or require("config.ide").menu_mouse_pending then return end
   mouse = mouse or vim.fn.getmousepos()
   local node = state.tree and state.tree:get_node()

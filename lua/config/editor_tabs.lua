@@ -159,7 +159,8 @@ function M.setup()
   local wheels = {}
   for _, name in ipairs({ "Down", "Right", "Up", "Left" }) do wheels[vim.keycode("<ScrollWheel" .. name .. ">")] =
     (name == "Down" or name == "Right") and 1 or -1 end
-  vim.on_key(function(key)
+  vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     if wheels[key] and vim.fn.getmousepos().winid == M.win then
       M.first = math.max(1, math.min(M.count or 1, M.first + wheels[key]))
       M.refresh(); return ""

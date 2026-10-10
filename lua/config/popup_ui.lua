@@ -92,6 +92,7 @@ function M.setup()
     mouse_keys[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
   end
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     if mouse_keys[typed] ~= nil then key = typed end
     if mouse_keys[key] == nil then return end
     local mouse = vim.fn.getmousepos()

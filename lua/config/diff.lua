@@ -289,6 +289,7 @@ function M.setup()
     releases[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
   end
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     if not releases[typed] and not releases[key] then return end
     local active, mouse = M.active, vim.fn.getmousepos()
     if M.busy or not active or not winvalid(active.right) or mouse.winid ~= active.right

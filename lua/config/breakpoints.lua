@@ -45,6 +45,7 @@ function M.setup()
   end
   local pressed
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     local kind = keys[typed] or keys[key]
     if not kind then return end
     local mouse = vim.fn.getmousepos()

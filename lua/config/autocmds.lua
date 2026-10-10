@@ -92,6 +92,7 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Clicking the outline from Insert mode keeps that mode until explicitly
     -- stopped; Aerial's default mappings only handle Normal/Visual mode.
     vim.keymap.set("i", "<LeftRelease>", function()
+      if require("config.mouse_capture").active() then return end
       vim.cmd("stopinsert")
       require("aerial").select({ winid = require("config.ide").editor_window() })
     end, { buffer = event.buf, desc = "Jump to symbol" })

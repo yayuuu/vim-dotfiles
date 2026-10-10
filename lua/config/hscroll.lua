@@ -180,6 +180,7 @@ function M.setup()
     wheels[vim.keycode("<ScrollWheel" .. direction .. ">")] = direction
   end
   vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     local wheel = wheels[typed] or wheels[key]
     if wheel then
       local win = vim.fn.getmousepos().winid

@@ -93,7 +93,8 @@ function M.setup()
   end
   -- Consume the native mouse gesture before Neovim can turn it into a text
   -- selection. An on_key listener leaves tree/menu buffer mappings intact.
-  vim.on_key(function(key)
+  vim.on_key(function(key, typed)
+    if require("config.mouse_capture").blocked(key, typed) then return end
     local kind = events[key]
     if not kind then
       return
