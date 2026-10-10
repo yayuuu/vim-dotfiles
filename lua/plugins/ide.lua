@@ -94,7 +94,13 @@ return {
       { source = "git_status", display_name = "Git" },
       { source = "buffers", display_name = "Tabs" },
     } },
-    filesystem = { commands = {
+    filesystem = { components = {
+      diagnostics = function(config, node, state)
+        local result = require("neo-tree.sources.common.components").diagnostics(config, node, state)
+        if result.text then result.text = result.text .. " " end
+        return result
+      end,
+    }, commands = {
       rename = function(state) require("config.ide").rename_file(state) end,
       open = function(state) require("config.files").open(state) end,
       copy_to_clipboard = function(state) require("config.files").copy(state) end,
@@ -186,7 +192,12 @@ return {
         if button == "l" then vim.schedule(function() require("config.git_sync").sync() end) end
       end,
     } }
-    opts.sections.lualine_c = { { "filename", path = 1 }, "diff", "diagnostics" }
+    opts.sections.lualine_c = { { "filename", path = 1 }, "diff", { "diagnostics", on_click = function(_, button)
+      if button == "l" then vim.schedule(function()
+        local problems = require("config.problems")
+        if not problems.view then problems.open() end
+      end) end
+    end } }
     opts.sections.lualine_x = { "encoding", "fileformat", "filetype" }
     opts.sections.lualine_y = { "progress" }
     opts.sections.lualine_z = { "location" }

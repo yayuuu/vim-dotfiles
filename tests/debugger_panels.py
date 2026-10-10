@@ -73,8 +73,30 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-panels-') as directory:
         editor.lua('require("config.terminals").show(...)', terminal)
         assert not editor.lua('return require("config.terminals").console_active')
         assert editor.lua('return vim.api.nvim_win_get_buf(require("config.terminals").win)') == terminal
-        choose_menu('Problems')
+        editor.lua('local ns=vim.api.nvim_create_namespace("StatusProblemsTest");'
+                   'vim.diagnostic.set(ns,...,{{lnum=0,col=0,severity=1,message="Status bar error"},'
+                   '{lnum=1,col=0,severity=2,message="Status bar warning"}})', document)
+
+        def click_diagnostic(severity):
+            editor.lua('vim.api.nvim_set_current_win(...);vim.cmd("startinsert")', main)
+            editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Editor input before status click')
+            editor.call('nvim_input', '<Esc>')
+            editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Diagnostics update in Normal')
+            symbol = editor.lua('return vim.trim(require("lualine.components.diagnostics.config").symbols.icons[...])', severity)
+            def position():
+                editor.lua('require("lualine").refresh({place={"statusline"}});vim.cmd("redraw!")')
+                row = editor.lua('return vim.o.lines-vim.o.cmdheight-1')
+                text = ''.join(editor.grid[row])
+                if symbol in text:
+                    return row, text.index(symbol)
+            editor.wait(position, 'Diagnostic icon appears in status bar')
+            editor.click(*position())
+
+        click_diagnostic('error')
         editor.wait(lambda: editor.lua('local p=require("config.problems");return p.view and p.view.win:valid()'), 'Problems opens in bottom pane')
+        problemwin = editor.lua('return require("config.problems").view.win.win')
+        click_diagnostic('warn')
+        assert editor.lua('local p=require("config.problems");return p.view and p.view.win.win==...', problemwin), 'Repeated status click keeps Problems open'
         assert editor.lua('local t=require("config.terminals");return not t.win and not t.list_win')
         assert editor.lua('local p=require("config.problems");local win=p.view.win.win;local m=require("config.ide").main_editor;'
                           'return vim.api.nvim_win_get_width(win)==vim.api.nvim_win_get_width(m) and vim.api.nvim_win_get_position(win)[2]==vim.api.nvim_win_get_position(m)[2]')

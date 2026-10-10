@@ -88,6 +88,8 @@ or perform operations on the user's actual repositories independently.
   from both representations of a file in a diff. Keep the marker if saving fails.
 - Diagnostic counters in document tabs use `` for errors and `` for warnings
   instead of E/W letters. Preserve their counts and diagnostic highlights.
+- Left-clicking diagnostic icons/counts in the status bar opens the existing
+  Problems panel. Repeated clicks keep it open rather than toggling it closed.
 - Closing a modified document offers Save / Don't save / Cancel;
   saving a new document prompts for a name.
 - Interactive `:wq` / `:wquit` in the editor save and close the current document
@@ -143,6 +145,8 @@ or perform operations on the user's actual repositories independently.
   renamed/untracked/ignored, staged and unstaged markers in this source only;
   retain conflict markers, diagnostics, file-type icons, and unsaved-change marks.
   The dedicated Git source keeps its status markers.
+  Files diagnostic markers have one extra blank column after them, shifting
+  the marker left to leave space beside the vertical scrollbar.
   Symbols follows the displayed editor document immediately after opening it,
   even while Files retains keyboard focus. Bind Aerial's existing window through
   its public API; preserve the layout, selection, and focused panel.
