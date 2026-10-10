@@ -87,6 +87,37 @@ local function lines(buf, text)
   vim.bo[buf].modifiable = false
 end
 
+-- Connections are north/east/south/west bits. Diagonals become three-cell
+-- rounded turns, combining with vertical lanes instead of overwriting them.
+local graph_symbols = { [1] = "│", [2] = "─", [3] = "╰", [4] = "│", [5] = "│", [6] = "╭", [7] = "├",
+  [8] = "─", [9] = "╯", [10] = "─", [11] = "┴", [12] = "╮", [13] = "┤", [14] = "┬", [15] = "┼" }
+local function graph_prefix(text)
+  return (text:gsub("^([ *|/\\_%-]+)", function(prefix)
+    local connections, nodes, width = {}, {}, #prefix
+    local function connect(column, mask)
+      if column < 1 then return end
+      connections[column] = bit.bor(connections[column] or 0, mask)
+      width = math.max(width, column)
+    end
+    for column = 1, #prefix do
+      local char = prefix:sub(column, column)
+      if char == "*" then nodes[column] = true
+      elseif char == "|" then connect(column, 5)
+      elseif char == "-" or char == "_" then connect(column, 10)
+      elseif char == "\\" then
+        connect(column - 1, 3); connect(column, 10); connect(column + 1, 12)
+      elseif char == "/" then
+        connect(column - 1, 6); connect(column, 10); connect(column + 1, 9)
+      end
+    end
+    local cells = {}
+    for column = 1, width do
+      cells[column] = nodes[column] and "●" or graph_symbols[connections[column]] or " "
+    end
+    return table.concat(cells)
+  end))
+end
+
 function M.refresh_history()
   local state = M.state()
   if not state or state.name ~= "git_status" or not valid(M.history_win) then return end
@@ -101,7 +132,7 @@ function M.refresh_history()
       if result.code == 0 then
         for _, row in ipairs(vim.split(vim.trim(result.stdout), "\n", { plain = true, trimempty = true })) do
           local prefix, refs, subject, hash = row:match("^(.-)\t(.-)\t(.-)\t(%x+)$")
-          text[#text + 1] = prefix and (prefix .. refs .. " " .. subject) or row
+          text[#text + 1] = prefix and (graph_prefix(prefix) .. refs .. " " .. subject) or graph_prefix(row)
           if hash then commits[#text] = { commit = hash, text = subject, msg = subject, root = root } end
         end
       else

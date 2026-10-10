@@ -107,6 +107,10 @@ or perform operations on the user's actual repositories independently.
 - View > Project files shows and selects Files without adding splits.
 - Git contains the status and graph starting at HEAD. Tabs lists documents, including
   diffs, without terminals, internal HEAD buffers, or helper buffers.
+  Render the commit graph with Unicode nodes, lines, and rounded branch turns
+  (`●`, `│`, `─`, `╭`, `╮`, `╰`, `╯`) instead of ASCII or diagonal strokes.
+  Combine turns with existing lanes at junctions. Convert only the graph prefix; preserve commit subjects,
+  branch names, hashes, row-to-commit mappings, and branch/merge topology.
 - All left panels prevent scrolling into empty space when their content fits.
   For horizontal overflow of text that is not truncated, add a scrollbar at the bottom
   of the relevant panel; limit scrolling to the content dimensions.
