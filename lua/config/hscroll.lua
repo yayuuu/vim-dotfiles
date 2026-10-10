@@ -111,6 +111,26 @@ local function make(win)
   local bar = { win = barwin, buf = buf, source = win }; M.bars[win] = bar
   return bar
 end
+local function adjacent(node, source, bar)
+  if node[1] == "leaf" then return false end
+  for index, child in ipairs(node[2]) do
+    local following = node[2][index + 1]
+    if node[1] == "col" and child[1] == "leaf" and child[2] == source
+      and following and following[1] == "leaf" and following[2] == bar then return true end
+    if adjacent(child, source, bar) then return true end
+  end
+  return false
+end
+local function place(win, bar)
+  if adjacent(vim.fn.winlayout(), win, bar.win) then return end
+  -- Reopening a bottom tool can insert it between the editor and its bar.
+  -- Move the existing split back next to its source without recreating it.
+  local diff = require("config.diff")
+  local busy = diff.busy; diff.busy = true
+  local ok, err = pcall(api.nvim_win_set_config, bar.win, { split = "below", win = win, height = 1 })
+  diff.busy = busy
+  if not ok then error(err, 0) end
+end
 local namespace = api.nvim_create_namespace("DesktopHorizontalScroll")
 function M.draw(win)
   if not editor(win) or vim.wo[win].wrap then M.close(win); return end
@@ -132,6 +152,7 @@ function M.draw(win)
   if maximum <= 0 then M.close(win); return end
   local bar = M.bars[win]
   if not bar or not valid(bar.win) then bar = make(win) end
+  place(win, bar)
   local width = api.nvim_win_get_width(bar.win)
   local track = math.max(1, width - 2)
   local thumb = math.max(1, math.min(track, math.floor(track * available / math.max(1, longest))))

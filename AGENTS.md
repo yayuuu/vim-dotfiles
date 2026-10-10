@@ -173,6 +173,9 @@ or perform operations on the user's actual repositories independently.
   HEAD side must not disable scrollbars for a long new file. Refresh them when
   opening and switching diffs. Rendering errors must not leave `hscroll.running`
   or `diff.busy` guards set, preventing further refreshes.
+  Keep each horizontal bar directly below its source window. Reopening terminals
+  or Problems must not leave an editor scrollbar below the bottom tool panel;
+  repair split placement while preserving focus and existing sessions.
 - Width measurement must handle NUL bytes in binary files (e.g. `.pyc`)
   without `E976: Using a Blob as a String`. Replace them with visible `^@` only
   for measurement; preserve the original buffer bytes and working scrollbars
@@ -280,7 +283,7 @@ Run a single scenario:
 - Choose scenarios relevant to the change: tabs → `editor_controls.py`,
   `editor_tab_separators.py`, `tab_focus_colors.py`, `save_markers.py`; diff → `diff.py`, `diff_input.py`,
   `breakpoint_mouse.py`, `diff_scrollbar.py`, `binary_diff_scrollbar.py`,
-  `hscroll_recovery.py`, `staged_diff.py`;
+  `hscroll_recovery.py`, `scrollbar_placement.py`, `staged_diff.py`;
   terminal/Problems → `terminal_input.py`, `panels.py`,
   `debugger_panels.py`; debugger → `debugger_mouse.py`; left panel/projects →
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
