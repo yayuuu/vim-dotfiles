@@ -74,14 +74,7 @@ function M.draw()
     end
   end
   M.count = #groups
-  local background = api.nvim_get_hl(0, { name = "BufferLineBackground", link = false }).bg
-  -- Normal follows the current window's winhighlight mapping. Resolve it in
-  -- the editor, even when focus is in the commit input or another tool.
-  local editor_background = api.nvim_win_call(target, function()
-    return api.nvim_get_hl(0, { name = "Normal", link = false }).bg
-      or api.nvim_get_hl(0, { name = "BufferLineBufferSelected", link = false }).bg
-  end)
-  api.nvim_set_hl(0, "DesktopTabSeparator", { fg = editor_background, bg = background })
+  require("config.colors").tab_separator(target)
   local first = math.min(math.max(1, M.first), math.max(1, #groups))
   M.first = first
   local text, spans, hits, column, byte = "", {}, {}, 0, 0

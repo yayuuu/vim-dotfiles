@@ -118,16 +118,6 @@ return {
       vim.opt.sidescrolloff = 16
     end,
     config = function()
-      local function colors()
-        vim.api.nvim_set_hl(0, "NeominimapBackground", { link = "Normal" })
-        vim.api.nvim_set_hl(0, "NeominimapCursorLine", { link = "Visual" })
-        vim.api.nvim_set_hl(0, "DesktopMinimapViewport", { link = "CursorLine" })
-      end
-      colors()
-      vim.api.nvim_create_autocmd("ColorScheme", {
-        group = vim.api.nvim_create_augroup("DesktopMinimap", { clear = true }),
-        callback = colors,
-      })
       require("config.minimap").setup()
       -- Native wheel events scroll only the floating preview. Route those
       -- over the map to its source, preserving the user's current mode.

@@ -58,6 +58,7 @@ function M.open(tree)
         for key, value in pairs({ number = false, relativenumber = false, signcolumn = "no",
           foldcolumn = "0", statuscolumn = "", wrap = false, winfixwidth = true }) do vim.wo[win][key] = value end
         vim.wo[win].winbar = " " .. section.title .. " "
+        require("config.panel_padding").attach(win)
         require("config.debugger_mouse").attach(buffers[index])
       end
       M.opening = false

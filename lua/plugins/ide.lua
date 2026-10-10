@@ -10,7 +10,8 @@ return {
     icons = { Class = "C", Constructor = "c", Function = "f", Method = "m", Interface = "I", Enum = "E", Struct = "S" },
     show_guides = true,
     keymaps = { ["<LeftRelease>"] = "actions.jump", ["<2-LeftMouse>"] = "actions.jump" },
-    win_opts = { winbar = " Functions / Symbols ", number = false, relativenumber = false },
+    win_opts = { winbar = " Functions / Symbols ", number = false, relativenumber = false,
+      foldcolumn = "1", statuscolumn = "%#Normal# " },
   }, config = function(_, opts)
     require("aerial").setup(opts)
     -- Keep empty Symbols panels compact; backend details remain in :AerialInfo.
@@ -45,7 +46,7 @@ return {
     ["<C-y>"] = false, ["<C-n>"] = false, ["<C-f>"] = false,
     ["<Tab>"] = { "select_and_accept", "snippet_forward", "fallback" },
   } } },
-  { "Mofiqul/vscode.nvim", priority = 1000, opts = { style = "dark", transparent = false } },
+  { "Mofiqul/vscode.nvim", priority = 1000, opts = function() return require("config.colors").theme_options() end },
   { "LazyVim/LazyVim", opts = {
     colorscheme = "vscode",
     icons = {
@@ -142,6 +143,7 @@ return {
     end })
   end },
   { "nvim-lualine/lualine.nvim", opts = function(_, opts)
+    opts.options.theme = require("config.colors").statusline()
     opts.options.component_separators = { left = "|", right = "|" }
     opts.options.section_separators = { left = "", right = "" }
     opts.sections.lualine_a = { "mode" }
@@ -149,7 +151,7 @@ return {
       if button == "l" then vim.schedule(function() require("config.git").branches() end) end
     end }, { function() return require("config.git_sync").label() end,
       cond = function() return require("config.git_sync").visible() end,
-      color = { fg = "#ffffff", bg = "#3c3c3c" }, padding = { left = 1, right = 1 },
+      color = require("config.colors").git_sync(), padding = { left = 1, right = 1 },
       on_click = function(_, button)
         if button == "l" then vim.schedule(function() require("config.git_sync").sync() end) end
       end,

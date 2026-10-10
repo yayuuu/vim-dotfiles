@@ -32,6 +32,7 @@ local function extent(win)
     cached = { tick = tick, tabstop = tabstop, width = width }; M.cache[buf] = cached
   end
   local available = api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff
+    - require("config.panel_padding").right(win)
   local maps = package.loaded["neominimap.window.float.window_map"]
   local map = maps and maps.get_minimap_winid(win)
   if map then available = available - api.nvim_win_get_width(map) end

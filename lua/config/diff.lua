@@ -269,20 +269,8 @@ function M.open(path, opts)
   M.show(buf)
 end
 
-local function colors()
-  vim.api.nvim_set_hl(0, "DiffAdd", { bg = "#204d2a" })
-  vim.api.nvim_set_hl(0, "DiffDelete", { bg = "#5a2020", fg = "#ff8989" })
-  vim.api.nvim_set_hl(0, "DiffChange", { bg = "#59401f" })
-  vim.api.nvim_set_hl(0, "DiffText", { bg = "#915b20", bold = true })
-  vim.api.nvim_set_hl(0, "DesktopDiffRemoved", { bg = "#5a2020" })
-  vim.api.nvim_set_hl(0, "DesktopDiffAddedGap", { bg = "#204d2a", fg = "#84c88b" })
-  vim.api.nvim_set_hl(0, "DesktopMapAdd", { bg = "#204d2a", fg = "#84c88b" })
-  vim.api.nvim_set_hl(0, "DesktopMapDelete", { bg = "#5a2020", fg = "#ff8989" })
-  vim.api.nvim_set_hl(0, "DesktopMapChange", { bg = "#59401f", fg = "#eab16b" })
-end
 
 function M.setup()
-  colors()
   local group = vim.api.nvim_create_augroup("DesktopIDEDiff", { clear = true })
   local releases = {}
   for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
@@ -305,7 +293,6 @@ function M.setup()
       end
     end)
   end, vim.api.nvim_create_namespace("DesktopDiffInputMouse"))
-  vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = colors })
   vim.api.nvim_create_autocmd("BufEnter", { group = group, callback = function(event)
     if M.busy or require("config.ide").is_tool_tab() then return end
     local win, buf = vim.api.nvim_get_current_win(), event.buf

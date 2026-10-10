@@ -1,4 +1,6 @@
 local group = vim.api.nvim_create_augroup("DesktopIDE", { clear = true })
+require("config.colors").setup()
+require("config.panel_padding").setup()
 require("config.layout").setup()
 require("config.diff").setup()
 require("config.documents").setup()

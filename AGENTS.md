@@ -102,6 +102,10 @@ or perform operations on the user's actual repositories independently.
 - Files contains the tree and Functions / Symbols (Aerial). Clicking opens a file
   or expands/collapses a directory. When there are no symbols, show only a brief
   **No symbols** message; backend diagnostics remain available through `:AerialInfo`.
+  Symbols and all four Debug sections have one fixed blank column on both the
+  left and right edges. Preserve these margins during horizontal scrolling and
+  resizing; account for them when calculating scrollbar overflow. Do not modify
+  symbol/DAP buffer contents or row mappings to add visual padding.
 - File clicks must work from Normal, Insert, Visual, Select, and terminal input,
   including repeated clicks. Resolve the row under the pointer instead of relying
   on the previous tree cursor. A new mouse press cancels an unfinished scrollbar
@@ -232,6 +236,15 @@ or perform operations on the user's actual repositories independently.
 
 ## Dialogs, pickers, and minimap
 
+- Keep the complete editable palette in
+  `palette.json` as a plain list of color names and values, with no code:
+  theme tokens for backgrounds/syntax/diagnostics/Git,
+  status bar colors, and our highlight overrides for diffs, minimap, sidebar
+  selectors, and tab separators. Keep loading, highlight definitions, and plugin
+  integration in `lua/config/colors.lua`. Other modules consume that module instead
+  of defining RGB values or writing their own color overrides. Feed the theme through
+  its public `color_overrides` / `group_overrides` options and reapply our highlights
+  after a colorscheme reload. Do not edit downloaded theme/plugin files.
 - Centered dialogs have a border and a clickable × in the top-right corner,
   including Plugins (Lazy), Mason, input, and composite Snacks pickers. Close the
   entire object through its owner's appropriate action, including its backdrop
@@ -262,6 +275,8 @@ or perform operations on the user's actual repositories independently.
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
 | `mouse_capture.lua` | Shared mouse gesture ownership for dragged widgets |
+| `panel_padding.lua` | Fixed Symbols and Debug margins using window options and decorations |
+| `colors.lua`, root `palette.json` | Palette data loader, theme/status bar options, and our highlight overrides |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
 | `tests/ui.py`, `tests/*.py`, `tests.sh` | UI/RPC client and regression scenarios |
