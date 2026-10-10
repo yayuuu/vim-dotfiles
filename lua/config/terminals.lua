@@ -225,7 +225,8 @@ function M.setup()
     if not valid(M.list_win) then return end
     if mouse.winid ~= M.list_win then return end
     if keys[key] then
-      local row, column = mouse.line, mouse.wincol
+      local row, column = require("config.panel_mouse").row(mouse, M.list_win), mouse.wincol
+      if not row then return "" end
       vim.schedule(function()
         if row == 1 then M.new()
         elseif row == M.console_row then M.show_debug_console()

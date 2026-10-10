@@ -3,6 +3,7 @@ M.default_config = {
   renderers = {
     directory = { { "git_directory" } }, git_section = { { "git_section" } },
     file = { { "git_file" } }, git_commit = { { "git_text" } }, git_commit_action = { { "git_text" } },
+    git_header_spacer = { { "git_text" } },
   },
 }
 M.components = vim.tbl_extend("force", require("neo-tree.sources.git_status.components"), {
@@ -66,6 +67,7 @@ function M.navigate(state, path, reveal, callback)
         children = {
           { id = root .. "::message", path = root, name = "Commit message…", type = "git_commit" },
           { id = root .. "::commit", path = root, name = "[Commit staged changes]", type = "git_commit_action" },
+          { id = root .. "::header-spacer", path = root, name = "", type = "git_header_spacer" },
           { id = index_id, path = root, name = "Staged Changes (" .. #staged .. ")", type = "git_section",
             extra = { section = "staged" }, children = staged },
           { id = working_id, path = root, name = "Changes (" .. #changes .. ")", type = "git_section",

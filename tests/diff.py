@@ -83,9 +83,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-diff-tabs-') as directory:
         editor.wait(shared_strip_spans_editor, 'Shared strip starts at left column and spans both columns')
         assert editor.lua('local d=require("config.diff").active;return vim.wo[d.left].winbar=="" and vim.wo[d.right].winbar==""')
         assert editor.lua('return vim.wo[...].winhighlight',active['left']).startswith('DiffAdd:DesktopDiffRemoved')
-        assert editor.lua('return vim.api.nvim_get_hl(0,{name="DiffAdd"}).bg')==0x204d2a
-        assert editor.lua('return vim.api.nvim_get_hl(0,{name="DesktopDiffRemoved"}).bg')==0x5a2020
-        assert editor.lua('return vim.api.nvim_get_hl(0,{name="DiffChange"}).bg')==0x59401f
+        palette = editor.lua('return require("config.colors").palette')
+        for group, color in [('DiffAdd', 'diff_added_bg'), ('DesktopDiffRemoved', 'diff_deleted_bg'), ('DiffChange', 'diff_changed_bg')]:
+            assert editor.lua('return vim.api.nvim_get_hl(0,{name=...}).bg', group) == int(palette[color][1:], 16)
         def line_highlights():
             return editor.lua('local d=require("config.diff").active;return vim.api.nvim_win_call(d.right,function()'
                               'local result={};for l,text in ipairs(vim.api.nvim_buf_get_lines(0,0,-1,false)) do '

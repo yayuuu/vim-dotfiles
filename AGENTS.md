@@ -33,6 +33,11 @@ or perform operations on the user's actual repositories independently.
 
 - The top contains a clickable File, Edit, Search, View, Project, Git, Debug,
   Terminal, Help menu. Menus, shortcuts, and context menus share the same actions.
+  Clicking outside an open dropdown, including empty panel space, dismisses it
+  without activating a row underneath. Menu-bar buttons still switch dropdowns.
+  Clicking the active heading closes its dropdown. Switch menus atomically and
+  scope delayed close callbacks to their own popup buffer so an old callback
+  cannot close or reopen the replacement menu.
 - The left side is a single column with **Projects, Files, Debug, Git, Tabs** tabs,
   in that order. Leave one character of padding before the first tab.
   Selecting a tab replaces the entire column's contents instead of adding a column.
@@ -49,6 +54,8 @@ or perform operations on the user's actual repositories independently.
   enlarging the window restores the chosen proportions. Account for window roles
   and the order of width changes, especially for the tree and terminal list.
 - Delayed rendering of the previous tab must not replace the newly selected tab.
+  Neo-tree's file-follow/reveal lookup must resolve diff document URIs to their
+  actual file paths on either side. Never scan URI components as directories.
 - Creating Symbols may close the previously focused dialog. Restore focus only
   if that window still exists; avoid automatic window restoration around Aerial.open
   that can target a closed window or leave focus in the Symbols panel.
@@ -63,8 +70,12 @@ or perform operations on the user's actual repositories independently.
   Support repeated clicks and mouse protocols with a generic release event;
   closing with the middle button happens on press.
 - Selecting or reopening a document moves it to the front of the MRU list.
+  Selecting an editable document tab (including a diff) enters Insert mode;
+  returning from Files or another panel to the editor does the same even when
+  its buffer has not changed. Esc stays in Normal mode while that editor retains
+  focus. Read-only HEAD, help/reports, and tool panels keep their appropriate modes.
   The mouse wheel over tabs scrolls the list horizontally without changing the active document.
-- The entire bar uses the inactive tab color; the active tab has a lighter background.
+- The entire bar uses the lighter inactive tab color; the active tab uses the dark panel background.
   The separator is a one-column **▌** (`vhalf`) character in the editor background color,
   placed between tabs and after the last tab when it fits in the viewport. Do not add it
   before × or after W 1, W 2, etc. Spaces inside a tab use that tab's background.
@@ -89,6 +100,11 @@ or perform operations on the user's actual repositories independently.
   without moving the cursor or changing its mode. The line number itself is not
   a breakpoint button. Account for scrolled code and editable diffs.
 - Saving does not format a file automatically; formatting is an explicit action.
+- F2 renames the selected file/folder in Files or the current file in the editor,
+  including an editable diff. Share the action with Rename in context menus.
+  Preserve buffer IDs, unsaved contents, and diff mappings; refuse existing targets.
+  Notify supporting LSP clients through file rename hooks, without requiring symbol
+  rename support. Shift+F2 remains the LSP symbol rename shortcut.
 
 ## Left panel and projects
 
@@ -100,7 +116,17 @@ or perform operations on the user's actual repositories independently.
   Skip deleted files when restoring. Switching projects hides clean tabs
   and preserves unsaved changes; project history does not store buffer contents.
 - Files contains the tree and Functions / Symbols (Aerial). Clicking opens a file
-  or expands/collapses a directory. When there are no symbols, show only a brief
+  or expands/collapses a directory. Opening a file from Files keeps keyboard focus
+  in Files: Ctrl+C copies the selected file/folder, Ctrl+V copies it into the selected
+  directory (or the selected file's parent), and Delete asks to delete the selection.
+  Copying into the same directory produces `Copy of name`; further collisions use
+  `Copy (2) of name`, etc., without overwriting existing files. Keep copies binary-safe,
+  retain the file clipboard for repeated pastes, and preserve unsaved editor contents.
+  Clicking the editor/tab moves keyboard focus to it and enters Insert mode.
+  Symbols follows the displayed editor document immediately after opening it,
+  even while Files retains keyboard focus. Bind Aerial's existing window through
+  its public API; preserve the layout, selection, and focused panel.
+  When there are no symbols, show only a brief
   **No symbols** message; backend diagnostics remain available through `:AerialInfo`.
   Symbols and all four Debug sections have one fixed blank column on both the
   left and right edges. Preserve these margins during horizontal scrolling and
@@ -112,6 +138,11 @@ or perform operations on the user's actual repositories independently.
   gesture: a release lost outside the host must not swallow the next file click.
 - Neo-tree rows of type `message`, such as `(3 hidden items)`, are not files.
   Clicking, Enter, and menu actions must not open their synthetic identifiers.
+  Empty space below list content must never activate the final item. Apply this
+  universally to Files, Symbols, Projects, Tabs, Git Status, commits, terminal
+  sessions, Debug panes, Problems, and picker/dialog lists. Validate the rendered
+  screen row instead of trusting Neovim's EOF-clamped mouse line. Keep terminal
+  and editor body clicks available for input/cursor placement.
 - View > Project files shows and selects Files without adding splits.
 - Git contains the status and graph starting at HEAD. Tabs lists documents, including
   diffs, without terminals, internal HEAD buffers, or helper buffers.
@@ -123,12 +154,38 @@ or perform operations on the user's actual repositories independently.
   Combine turns with existing lanes at junctions. Convert only the graph prefix; preserve commit subjects,
   branch names, hashes, row-to-commit mappings, and branch/merge topology.
 - All left panels prevent scrolling into empty space when their content fits.
+  Clamp vertical mouse scrolling before it changes the viewport, including the
+  final partial wheel step. Do not allow overshoot followed by a visible snap back.
   For horizontal overflow of text that is not truncated, add a scrollbar at the bottom
   of the relevant panel; limit scrolling to the content dimensions.
-  Keep scrollbar splits exactly one row high and their own view at the start.
-  Native `winfixheight` alone does not prevent expansion after resizing; refresh
-  geometry and visibility across Normal, Insert, and Visual modes.
+  Render each scrollbar as a borderless, one-row float inside the source panel's
+  last row. Do not allocate a separate split or blank separator row above it:
+  the saved row belongs to visible content. Keep the caret above the scrollbar,
+  including at EOF, and account for the reserved row in viewport calculations.
+  Retain the native separator below the panel for resizing the terminal/panels;
+  scrollbar clicks must not intercept a drag on that separator. Track the source
+  window's size and placement across Normal, Insert, and Visual modes.
   Text, selections, and value previews must not cover the main editor.
+- Every content panel with vertical overflow has a vertical scrollbar made of
+  full `█` blocks. Native editor and diff windows use their minimaps instead.
+  Include Files, Symbols, Git, Debug, Problems, terminals/console, session lists,
+  and dialog/picker panels. For virtualized picker lists, use item count and list
+  scrolling rather than the visible buffer's line count.
+  Horizontal bars span the entire panel width; vertical bars end above them.
+  Put vertical bars inside native panels, preserving their resize separators,
+  and on the existing right border of bordered dialogs. Preserve padding beside them.
+  Native-panel scrollbars stay below floating dialogs such as Plugins/Mason;
+  a dialog's own scrollbar follows its layer. Reserve their column in scrolling
+  content width calculations. Git Status has a separate full-width pinned header.
+- Horizontal scrollbars use the lower half-block `▄` for both track and thumb, with no arrows.
+  The track foreground uses `ui_bar_background`; the thumb foreground uses
+  `scrollbar_thumb`. Their background matches `ui_background`. Clicking either
+  endpoint scrolls to that end; keep dragging and terminal resize working.
+  Horizontal bars and document minimaps own the entire left-button gesture
+  through release. Use the shared mouse capture so releasing over another
+  control only stops scrolling; it must not focus a terminal, open menus, switch
+  tabs, or close documents. Retain capture through every release handler, then
+  clear it; a fresh press must recover from a release lost outside the host.
 
 ## Terminals and Problems
 
@@ -142,6 +199,12 @@ or perform operations on the user's actual repositories independently.
   instead of a fixed Terminal label. Update it after `cd` and when a program starts.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
   Esc, Esc exits input mode; clicking again resumes it. Preserve text selection.
+  Dragging/clicking its vertical scrollbar enters native scrollback mode so
+  history stays at the requested position. Consume the mouse gesture and use
+  an unremapped terminal escape; never invoke `:normal` from terminal input or
+  send scrolling keys to the shell. Clicking the terminal body resumes input.
+  Clamp the mouse wheel over the terminal body before moving its viewport;
+  it must not scroll into empty space beyond the last history row.
 - **Debug console** is a permanent, nonclosable list entry using the same wide area.
   Switching preserves both the console and terminal.
 - View > Problems replaces the entire bottom area with diagnostics, a title, and
@@ -185,19 +248,23 @@ or perform operations on the user's actual repositories independently.
   Switching baselines reuses the document card without losing edits.
 - Synchronize unsaved changes between the ordinary tab and diff proxy. Saving
   writes the actual file, and closing a diff preserves its changes.
-- Additions are green, deletions red, and changes orange, including on the minimap.
+- Diff and minimap additions, deletions, and changes use the matching palette colors.
   Both sides have synchronized horizontal scrolling.
 - Horizontal scrollbars depend on overflow across both columns together: an empty
   HEAD side must not disable scrollbars for a long new file. Refresh them when
   opening and switching diffs. Rendering errors must not leave `hscroll.running`
   or `diff.busy` guards set, preventing further refreshes.
-  Keep each horizontal bar directly below its source window. Reopening terminals
-  or Problems must not leave an editor scrollbar below the bottom tool panel;
-  repair split placement while preserving focus and existing sessions.
+  Keep each horizontal bar at the bottom inside its source window. Reopening
+  terminals or Problems must not place it below the bottom tool panel;
+  update float geometry while preserving focus and existing sessions.
 - Width measurement must handle NUL bytes in binary files (e.g. `.pyc`)
   without `E976: Using a Blob as a String`. Replace them with visible `^@` only
   for measurement; preserve the original buffer bytes and working scrollbars
   after switching to the next file.
+- Vertical wheel scrolling over either side of an added-file diff moves the
+  populated comparison. Do not let the empty read-only baseline's cursor force
+  the editable side back to the start. Tool-panel scrolling beside a Select-mode
+  editor must not execute an insertion command against a read-only panel.
 - When closing a diff, unregister both sides from the native diff set;
   repeated switching must not color unchanged lines.
 - Project history / File history preserve a separate Diffview view and one history
@@ -213,10 +280,19 @@ or perform operations on the user's actual repositories independently.
   over a terminal entry, tab, or close button must not activate that control.
   Other mouse listeners and release mappings must honor the capture; clear it
   after all handlers for the release event have finished.
-- Staged Changes and Changes are separate and initially expanded. Shift+click
-  selects a range, Ctrl+click toggles an individual selection, and right-click
+- Staged Changes and Changes are separate and initially expanded.
+  The Git Status title and Commit message input stay pinned; scrolling and the
+  vertical scrollbar begin below them at Staged Changes. Preserve the commit
+  input's width; it is part of the header and does not overlap the scrollbar.
+  The commit input has no close button and remains present while Git is selected.
+  Keep its rounded border and geometry stable when opening diffs. Empty input
+  clicks start editing; the blank-list click guard must not consume them.
+  Shift+click selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
   in Staged Changes.
+- Clicks in the empty area below Git Status rows do not open the last file or
+  alter range selections. Check the rendered screen row; Neovim clamps the mouse
+  buffer line to EOF even when the pointer is below the list.
 - Stage saves the buffer before adding it to the index. Discard requires confirmation,
   creates a backup in the state directory, and restores the index version while
   preserving staged changes. Commit includes staged changes and the message from
@@ -245,6 +321,24 @@ or perform operations on the user's actual repositories independently.
   of defining RGB values or writing their own color overrides. Feed the theme through
   its public `color_overrides` / `group_overrides` options and reapply our highlights
   after a colorscheme reload. Do not edit downloaded theme/plugin files.
+- Structural UI colors have exactly three editable entries in `palette.json`:
+  `ui_background` for every editor/tool/dialog panel, panel headers, menus, and the active tab,
+  `ui_bar_background` for inactive tabs, tab strip fill,
+  and the status bar, and `ui_separator` for panel dividers and popup borders.
+  Derive the theme's background tokens from these entries in `colors.lua`;
+  do not add per-panel background RGB duplicates to JSON. Separator backgrounds
+  match the adjacent dark panels, including border/close-button helper windows.
+  Keep distinct colors for selections, mode badges, diff highlights, and scrollbars.
+  `default.json` stores the original pre-DankShell colors in the same schema,
+  with the original editor/bar/separator colors used as its three UI entries.
+- Syntax and accent colors come from a portable snapshot of the active VS Code
+  **Dynamic Base16 DankShell** theme from `DankLinux.dms-theme`, including syntax,
+  semantic tokens, diagnostics, Git decorations, and all 16 ANSI colors.
+  Do not depend on a local VS Code extension at runtime. `vsc*` names are the
+  `vscode.nvim` theme API tokens; their names do not describe the imported hues.
+  VS Code alpha colors are composited over the editor background into opaque RGB.
+  Keep terminal ANSI colors independent from syntax tokens and preserve a visible
+  minimap viewport even when the theme's current-line background matches the editor.
 - Centered dialogs have a border and a clickable × in the top-right corner,
   including Plugins (Lazy), Mason, input, and composite Snacks pickers. Close the
   entire object through its owner's appropriate action, including its backdrop
@@ -259,6 +353,8 @@ or perform operations on the user's actual repositories independently.
   separately from the debounce for regenerating minimap text. Coalesce queued
   movements to the latest pointer position and respect the source's scrolloff
   margin so redraw does not shift the viewport again after moving the cursor.
+  Use a clearly visible blue viewport background (`minimap_viewport_bg`),
+  independently of the theme's current-line highlight.
 
 ## Module map and state
 
@@ -273,10 +369,14 @@ or perform operations on the user's actual repositories independently.
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
+| `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
+| `rename.lua` | File/folder rename, preserved buffers/diffs, and LSP file notifications |
+| `files.lua` | Files focus, file clipboard, duplicate naming, and deletion |
 | `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
 | `mouse_capture.lua` | Shared mouse gesture ownership for dragged widgets |
+| `panel_mouse.lua` | Rendered row validation and blank panel mouse gestures |
 | `panel_padding.lua` | Fixed Symbols and Debug margins using window options and decorations |
-| `colors.lua`, root `palette.json` | Palette data loader, theme/status bar options, and our highlight overrides |
+| `colors.lua`, root `palette.json` and `default.json` | Active/original palette data, loader, theme/status bar options, and our highlight overrides |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
 | `tests/ui.py`, `tests/*.py`, `tests.sh` | UI/RPC client and regression scenarios |
@@ -316,17 +416,29 @@ Run a single scenario:
 - Choose scenarios relevant to the change: tabs → `editor_controls.py`,
   `editor_tab_separators.py`, `tab_focus_colors.py`, `save_markers.py`; diff → `diff.py`, `diff_input.py`,
   `breakpoint_mouse.py`, `diff_scrollbar.py`, `binary_diff_scrollbar.py`,
-  `hscroll_recovery.py`, `scrollbar_placement.py`, `staged_diff.py`;
+  `hscroll_recovery.py`, `scrollbar_placement.py`, `scrollbar_layout.py`, `staged_diff.py`;
   terminal/Problems → `terminal_input.py`, `panels.py`,
   `debugger_panels.py`; debugger → `debugger_mouse.py`; left panel/projects →
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
   `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `commit_scrollbar.py`,
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`;
-  editing → `comment_selection.py`; document creation → `new_file.py`;
+  editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
+  file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and
   recovery after a lost scrollbar release → `tree_click.py`.
+  Empty Git Status clicks → `git_empty_click.py`.
+  File clipboard/focus and deletion → `file_clipboard.py`.
+  Immediate Symbols refresh → `symbols_refresh.py`; vertical boundaries → `sidebar_vertical_scroll.py`.
+  Automatic vertical bars and combined-axis geometry → `panel_scrollbars.py`.
+  Terminal scrollback gestures, wheel boundaries, and return to input → `terminal_scrollbar.py`.
+  Empty panel/list clicks → `panel_empty_click.py`.
+  Dialog layers and pinned Git header → `scrollbar_layering.py`.
+  Top menu switching and repeated-heading clicks → `menu_switch.py`.
+  Added-file diff wheel scrolling and Select-mode panel scrolling → `diff_vertical_scroll.py`.
+  Files following/revealing diff documents → `diff_files_tree.py`.
   Minimap gestures and immediate viewport updates → `minimap_drag.py`.
+  Minimap/horizontal drag releases over other controls → `scroll_drag_capture.py`.
 - Check visible behavior and actual gestures. For regressions, consider a test
   that fails before the fix. Documentation-only changes do not require the full UI suite.
   Run `git diff --check`.

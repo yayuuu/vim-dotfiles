@@ -6,6 +6,7 @@ local function valid(win) return win and api.nvim_win_is_valid(win) end
 
 function M.close(win)
   if not valid(win) then return end
+  if vim.b[api.nvim_win_get_buf(win)].ide_git_input then return end
   if M.owners[win] then M.owners[win](); return end
   local lazy = package.loaded["lazy.view"]
   if lazy and lazy.visible() and lazy.view.win == win then lazy.view:close(); return end
@@ -25,7 +26,7 @@ end
 function M.refresh()
   M.scanning = true
   for parent, button in pairs(M.buttons) do
-    if not valid(parent) then
+    if not valid(parent) or vim.b[api.nvim_win_get_buf(parent)].ide_git_input then
       if valid(button.win) then api.nvim_win_close(button.win, true) end
       M.buttons[parent], M.owners[parent] = nil, nil
     end
@@ -38,7 +39,7 @@ function M.refresh()
     local layout_window = vim.w[win].snacks_layout or ft == "snacks_layout_box"
     local popup = M.owners[win] or (config.relative == "editor" and (config.focusable or ft == "noice")
       and ft ~= "NvMenu" and ft ~= "VoltWindow" and not layout_window)
-    if popup and config.relative ~= "" and not config.external and not config.hide then
+    if popup and not vim.b[buf].ide_git_input and config.relative ~= "" and not config.external and not config.hide then
       local borderless = not config.border or config.border == "none"
       -- Snacks already positions its panes and borders inside the layout root.
       -- Adding a root border afterwards shifts every pane and duplicates edges.

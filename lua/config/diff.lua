@@ -251,7 +251,7 @@ function M.open(path, opts)
   vim.api.nvim_create_autocmd("BufWriteCmd", { buffer = buf, callback = function()
     M.flush()
     M.sync(entry)
-    vim.api.nvim_buf_call(filebuf, function() vim.cmd("write") end)
+    vim.api.nvim_buf_call(filebuf, function() require("config.rename").write(filebuf) end)
     vim.bo[buf].modified = false
     require("config.editor_tabs").draw()
   end })
@@ -262,7 +262,7 @@ function M.open(path, opts)
   vim.api.nvim_create_autocmd("BufWipeout", { buffer = buf, once = true, callback = function()
     M.flush()
     if M.active and M.active.buf == buf then M.leave() end
-    M.entries[buf], M.paths[path] = nil, nil
+    M.entries[buf], M.paths[entry.path] = nil, nil
     entry.removed = true
     vim.schedule(function() if valid(before) then vim.api.nvim_buf_delete(before, { force = true }) end end)
   end })

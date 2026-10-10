@@ -22,7 +22,8 @@ function M.setup()
   api.nvim_set_decoration_provider(namespace, {
     on_win = function(_, win)
       if M.right(win) == 0 or api.nvim_win_get_config(win).relative ~= "" then return false end
-      columns[win] = math.max(0, api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff - 1)
+      columns[win] = math.max(0, api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff
+        - require("config.vscroll").width(win) - 1)
     end,
     on_line = function(_, win, buf, row)
       api.nvim_buf_set_extmark(buf, namespace, row, 0, { ephemeral = true,

@@ -112,7 +112,17 @@ function M.menu(state, node)
   return items
 end
 
+function M.mouse_node(state, mouse)
+  if not state or not state.tree or mouse.winid ~= state.winid or mouse.line < 1 then return end
+  -- getmousepos().line clamps clicks below EOF to the last buffer line.
+  -- Accept a node only if that line is actually drawn under the pointer.
+  local position = vim.fn.screenpos(state.winid, mouse.line, math.max(1, mouse.column))
+  if position.row ~= mouse.screenrow then return end
+  return state.tree:get_node(mouse.line)
+end
+
 function M.setup()
+  require("config.git_header").setup()
   local events = {}
   for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
     events[vim.keycode("<" .. prefix .. "LeftMouse>")] = "Reset"
@@ -135,7 +145,7 @@ function M.setup()
         or vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].filetype ~= "neo-tree" then return end
       local state = require("neo-tree.sources.manager").get_state_for_window(mouse.winid)
       if not state or state.name ~= "git_status" then return end
-      local node = state.tree and state.tree:get_node(mouse.line)
+      local node = M.mouse_node(state, mouse)
       if not node or node.type ~= "file" then return end
       M.selection_mouse_pending = true
       vim.schedule(function()
@@ -260,12 +270,12 @@ function M.click(state, mouse)
   if require("config.mouse_capture").active() then return end
   if M.selection_mouse_pending or require("config.ide").menu_mouse_pending then return end
   mouse = mouse or vim.fn.getmousepos()
-  local node = state.tree and state.tree:get_node()
+  local node = M.mouse_node(state, mouse)
+  if not node then return end
   if state.tree and mouse.winid == state.winid and mouse.line > 0 then
     -- Repeated mouse presses are mapped to no-ops to prevent Vim text selection.
     -- Use the actual clicked row rather than the cursor left by a previous click.
-    node = state.tree:get_node(mouse.line)
-    if node then vim.api.nvim_win_set_cursor(state.winid, { mouse.line, 0 }) end
+    vim.api.nvim_win_set_cursor(state.winid, { mouse.line, 0 })
   end
   if node and node.type == "directory" and node:get_depth() == 1
     and mouse.winid == state.winid and mouse.line > 0 then
@@ -422,7 +432,7 @@ function M.input(state, focus)
   local position = vim.api.nvim_win_get_position(state.winid)
   field.treewin, field.treebuf = state.winid, state.bufnr
   local config = { relative = "editor", row = position[1] + 2, col = position[2] + 1,
-    width = math.max(1, vim.api.nvim_win_get_width(state.winid) - 2), height = 1, border = "none", style = "minimal", zindex = 25 }
+    width = math.max(1, vim.api.nvim_win_get_width(state.winid) - 2), height = 1, border = "rounded", style = "minimal", zindex = 25 }
   if field.win and vim.api.nvim_win_is_valid(field.win) then vim.api.nvim_win_set_config(field.win, config)
   else field.win = vim.api.nvim_open_win(field.buf, false, config) end
   vim.wo[field.win].winbar = ""; vim.wo[field.win].winhighlight = "Normal:Visual"
@@ -452,6 +462,8 @@ function M.header(state)
   require("neo-tree.ui.renderer").redraw(state)
   -- redraw() replaces the buffer without firing Neo-tree's after_render event.
   M.highlight(state)
+  require("config.git_header").sync(state)
+  M.input(state)
 end
 
 function M.after_render(state)
@@ -460,6 +472,7 @@ function M.after_render(state)
       { buffer = state.bufnr, desc = "Refresh Git status" })
     M.align(state)
     M.input(state)
+    require("config.git_header").sync(state)
     M.highlight(state)
     if not registered[state.bufnr] then
       registered[state.bufnr] = true

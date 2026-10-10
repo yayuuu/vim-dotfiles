@@ -61,6 +61,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-click-') as directory:
         click(second)
         assert editor.lua('return require("config.hscroll").drag==nil')
 
+        # Earlier mode-transition diagnostics must not cover this gesture fixture.
+        editor.lua('require("noice").cmd("dismiss")')
         preview = editor.lua('local b=vim.api.nvim_create_buf(false,true);local lines={};'
                              'for i=1,150 do lines[i]="Preview line "..i end;vim.api.nvim_buf_set_lines(b,0,-1,false,lines);'
                              'local w=vim.api.nvim_open_win(b,false,{relative="editor",row=5,col=80,width=35,height=15,style="minimal",border="single"});'

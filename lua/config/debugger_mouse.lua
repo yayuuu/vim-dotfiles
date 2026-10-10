@@ -239,11 +239,11 @@ function M.setup()
     local mouse = vim.fn.getmousepos()
     if kind == "Release" and pressed then
       local start = pressed; pressed = nil
-      if mouse.winid == start.win and mouse.line == start.row then vim.schedule(function() M.click(start.win, start.row) end) end
+      if require("config.panel_mouse").row(mouse, start.win) == start.row then vim.schedule(function() M.click(start.win, start.row) end) end
       return ""
     end
     if kind == "Drag" and pressed then pressed = nil; return "" end
-    if kind == "Mouse" and M.handles(mouse.winid) and mouse.line > 0
+    if kind == "Mouse" and M.handles(mouse.winid) and require("config.panel_mouse").row(mouse)
       and not require("config.ide").menu_mouse_pending then
       pressed = { win = mouse.winid, row = mouse.line }
       return ""

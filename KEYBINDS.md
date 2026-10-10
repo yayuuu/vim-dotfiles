@@ -64,7 +64,8 @@ project dependencies and settings affect the available suggestions.
 
 | Shortcut | Action |
 | --- | --- |
-| F2 | Rename the symbol |
+| F2 | Rename the selected file/folder in Files, or the current file |
+| Shift+F2 | Rename the symbol through the language server |
 | F12 | Go to definition |
 | Shift+F12 | Find references; also available from the context menu |
 
@@ -75,6 +76,8 @@ The code context menu also provides documentation, code actions, and formatting.
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+Shift+E / Alt+E | Select Files |
+| Ctrl+C / Ctrl+V in Files | Copy the selected file/folder / paste into the selected directory |
+| Delete in Files | Delete the selected file/folder, with confirmation |
 | Ctrl+Shift+G / Alt+R | Git changes in the tree |
 | Alt+G | LazyGit: staging, commits, history, branches |
 | Alt+D | Diffview: repository diffs |
@@ -82,6 +85,9 @@ The code context menu also provides documentation, code actions, and formatting.
 | Esc, Esc in the terminal | Exit terminal input mode |
 
 File > Open folder opens a project. Terminal > New terminal creates a session.
+Opening a file from Files keeps keyboard focus in the tree. Click the editor or its
+tab to type. Pasting in the same directory creates `Copy of name`; further copies
+use `Copy (2) of name`, etc. Existing files are preserved.
 `[↓ Hide]` hides Problems. `:DiffviewClose` closes the Diffview or history view.
 R / F5 in the Git panel refreshes the status. Shift+click selects a range of files,
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard

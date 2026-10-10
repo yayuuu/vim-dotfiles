@@ -154,11 +154,14 @@ function M.setup()
     (name == "Down" or name == "Right") and 1 or -1 end
   vim.on_key(function(key, typed)
     if require("config.mouse_capture").blocked(key, typed) then return end
-    if wheels[key] and vim.fn.getmousepos().winid == M.win then
-      M.first = math.max(1, math.min(M.count or 1, M.first + wheels[key]))
+    -- A Files/terminal buffer mapping can replace key before this listener sees
+    -- it. The original typed mouse event still belongs to the document strip.
+    local wheel = wheels[typed] or wheels[key]
+    if wheel and vim.fn.getmousepos().winid == M.win then
+      M.first = math.max(1, math.min(M.count or 1, M.first + wheel))
       M.refresh(); return ""
     end
-    local event = events[key]
+    local event = events[typed] or events[key]
     if not event then return end
     local mouse = vim.fn.getmousepos()
     local diff = require("config.diff").active
@@ -180,7 +183,8 @@ function M.setup()
             elseif event.button == "Right" then ide.tab_menu(hit.id)
             else
               ide.open_file(nil, hit.id)
-              if vim.bo.modifiable and vim.bo.buftype == "" then vim.cmd("startinsert") end
+              if vim.bo.modifiable and not vim.bo.readonly
+                and (vim.bo.buftype == "" or vim.b.ide_diff_file) then vim.cmd("startinsert") end
             end
             M.refresh()
           end)

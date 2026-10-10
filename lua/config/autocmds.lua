@@ -4,9 +4,11 @@ require("config.panel_padding").setup()
 require("config.layout").setup()
 require("config.diff").setup()
 require("config.documents").setup()
+require("config.panel_mouse").setup()
 require("config.terminals").setup()
 require("config.editor_tabs").setup()
 require("config.hscroll").setup()
+require("config.vscroll").setup()
 require("config.breakpoints").setup()
 require("config.tabs").setup()
 require("config.git").setup()
@@ -94,26 +96,39 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Clicking the outline from Insert mode keeps that mode until explicitly
     -- stopped; Aerial's default mappings only handle Normal/Visual mode.
     vim.keymap.set("i", "<LeftRelease>", function()
-      if require("config.mouse_capture").active() then return end
-      vim.cmd("stopinsert")
-      require("aerial").select({ winid = require("config.ide").editor_window() })
+      require("config.ide").symbols_click()
     end, { buffer = event.buf, desc = "Jump to symbol" })
   end,
 })
-vim.api.nvim_create_autocmd("BufWinEnter", {
+local editor_input_request = 0
+vim.api.nvim_create_autocmd("ModeChanged", {
+  group = group, pattern = "i*:n", callback = function()
+    -- Escape must cancel an input request queued by an earlier focus event.
+    editor_input_request = editor_input_request + 1
+  end,
+})
+vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter", "WinEnter" }, {
   group = group,
   callback = function()
-    if #vim.api.nvim_list_uis() > 0 and vim.bo.buftype == "" and vim.bo.modifiable
+    local ide, diff, scroll = require("config.ide"), require("config.diff"), require("config.hscroll")
+    if ide.outline_busy or diff.busy or scroll.running then return end
+    if #vim.api.nvim_list_uis() > 0 and (vim.bo.buftype == "" or vim.b.ide_diff_file) and vim.bo.modifiable
+      and not vim.bo.readonly
       and not require("config.ide").is_tool_tab()
       and vim.api.nvim_win_get_config(0).relative == "" then
       local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
-      vim.schedule(function()
-        if vim.api.nvim_get_current_win() == win and vim.api.nvim_get_current_buf() == buf
+      editor_input_request = editor_input_request + 1
+      local request = editor_input_request
+      -- Leaving terminal input finishes after focus events. Wait for that mode
+      -- transition before starting ordinary editor input.
+      vim.defer_fn(function()
+        if request == editor_input_request and vim.api.nvim_get_current_win() == win and vim.api.nvim_get_current_buf() == buf
           and not require("config.ide").is_tool_tab()
-          and vim.bo.buftype == "" and vim.bo.modifiable and vim.fn.mode() == "n" then
+          and (vim.bo.buftype == "" or vim.b.ide_diff_file) and vim.bo.modifiable
+          and not vim.bo.readonly and vim.fn.mode() == "n" then
           vim.cmd("startinsert")
         end
-      end)
+      end, 20)
     end
   end,
 })

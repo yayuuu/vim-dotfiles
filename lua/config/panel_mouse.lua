@@ -1,0 +1,72 @@
+-- Distinguish rendered rows from clicks that Neovim clamps to the last item.
+local M = {}
+local api = vim.api
+
+function M.row(mouse, win)
+  win = win or mouse.winid
+  if not win or win == 0 or not api.nvim_win_is_valid(win) or mouse.winid ~= win or mouse.line < 1 then return end
+  local position = vim.fn.screenpos(win, mouse.line, math.max(1, mouse.column))
+  if position.row == mouse.screenrow then return mouse.line end
+end
+
+function M.setup()
+  local capture = require("config.mouse_capture")
+  local events = {}
+  for _, modifier in ipairs({ "", "S-", "C-", "A-" }) do
+    for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
+      for _, kind in ipairs({ "Mouse", "Drag", "Release" }) do
+        events[vim.keycode("<" .. modifier .. prefix .. "Left" .. kind .. ">")] = kind
+      end
+    end
+  end
+  local blank
+  vim.on_key(function(key, typed)
+    local kind = events[typed] or events[key]
+    if not kind then return end
+    if blank and kind ~= "Mouse" then
+      if kind == "Release" then capture.release(blank); blank = nil end
+      return ""
+    end
+    if kind ~= "Mouse" then return end
+    if blank then capture.cancel(blank); blank = nil end
+    if capture.active() then return end
+    local mouse = vim.fn.getmousepos()
+    local menus = package.loaded["menu.state"]
+    if menus and #menus.bufids > 0 then
+      local inside = false
+      for _, buf in ipairs(menus.bufids) do
+        for _, w in ipairs(vim.fn.win_findbuf(buf)) do
+          local p = api.nvim_win_get_position(w)
+          if mouse.screenrow >= p[1] and mouse.screenrow <= p[1] + api.nvim_win_get_height(w) + 1
+            and mouse.screencol >= p[2] and mouse.screencol <= p[2] + api.nvim_win_get_width(w) + 1 then inside = true end
+        end
+      end
+      -- The menu bar's own buttons still switch between dropdowns.
+      local bar_button = mouse.screenrow == 1 and mouse.screencol <= #vim.trim(api.nvim_eval_statusline(vim.o.tabline, { use_tabline = true }).str)
+      if not inside and not bar_button then
+        blank = {}; capture.claim(blank)
+        vim.schedule(function() require("config.ide").close_menu() end)
+        return ""
+      end
+    end
+    local win = mouse.winid
+    if win == 0 or not api.nvim_win_is_valid(win) then return end
+    local buf, config = api.nvim_win_get_buf(win), api.nvim_win_get_config(win)
+    -- Editors and terminal/console bodies accept cursor/input clicks anywhere.
+    if vim.bo[buf].buftype == "terminal" or vim.bo[buf].buftype == "prompt" or vim.b[buf].ide_git_input
+      or vim.bo[buf].filetype == "dap-repl" or vim.b[buf].ide_hscroll or vim.b[buf].ide_vscroll
+      or vim.b[buf].ide_editor_tabs or vim.b[buf].ide_diff_before or vim.b[buf].ide_diff_file
+      or (config.relative == "" and require("config.ide").is_document(buf)) then return end
+    local top = api.nvim_win_get_position(win)[1] + 1 + (vim.wo[win].winbar ~= "" and 1 or 0)
+    -- Preserve titles, tab selectors, borders, and resize separators.
+    if mouse.screenrow < top or mouse.screenrow >= top + vim.fn.getwininfo(win)[1].height then return end
+    local row = M.row(mouse, win)
+    local text = row and api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
+    if row and text and vim.trim(text) ~= "" then return end
+    blank = {}
+    capture.claim(blank)
+    return ""
+  end, api.nvim_create_namespace("DesktopPanelBlankClick"))
+end
+
+return M

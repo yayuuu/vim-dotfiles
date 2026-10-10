@@ -1,6 +1,7 @@
 local M = {}
 local api = vim.api
 local drag
+local capture = require("config.mouse_capture")
 local viewport_namespace = api.nvim_create_namespace("DesktopMinimapViewport")
 
 local function clamp(value, low, high)
@@ -114,22 +115,29 @@ end
 
 function M.setup()
   local events = {}
-  for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
-    for _, kind in ipairs({ "Mouse", "Drag", "Release" }) do
-      events[vim.keycode("<" .. prefix .. "Left" .. kind .. ">")] = kind
+  for _, modifier in ipairs({ "", "S-", "C-", "A-" }) do
+    for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
+      for _, kind in ipairs({ "Mouse", "Drag", "Release" }) do
+        events[vim.keycode("<" .. modifier .. prefix .. "Left" .. kind .. ">")] = kind
+      end
     end
   end
   -- Consume the native mouse gesture before Neovim can turn it into a text
   -- selection. An on_key listener leaves tree/menu buffer mappings intact.
   vim.on_key(function(key, typed)
-    if require("config.mouse_capture").blocked(key, typed) then return end
-    local kind = events[key]
+    local kind = events[typed] or events[key]
     if not kind then
       return
     end
     local mouse = vim.fn.getmousepos()
     if kind == "Mouse" then
+      capture.cancel(drag)
+      drag = nil
+      if capture.blocked(key, typed) then return end
       drag = start(mouse)
+      if drag then capture.claim(drag) end
+    elseif capture.blocked(key, typed) and capture.owner ~= drag then
+      return
     end
     if not drag then
       return
@@ -138,22 +146,28 @@ function M.setup()
     state.latest_row = mouse.screenrow
     -- Collapse queued movements into the latest position so a fast drag
     -- cannot build up stale scroll operations behind the pointer.
-    if not state.pending then
+    if not state.pending and not state.cancelled then
       state.pending = true
       vim.schedule(function()
         state.pending = false
-        apply(state, state.latest_row)
+        if not state.cancelled then apply(state, state.latest_row) end
       end)
     end
     if kind == "Release" then
+      capture.release(state)
       drag = nil
     end
     return ""
   end, api.nvim_create_namespace("DesktopMinimapMouse"))
   api.nvim_create_autocmd({ "WinClosed", "VimResized", "TabLeave" }, {
     group = api.nvim_create_augroup("DesktopMinimapMouse", { clear = true }),
-    callback = function()
-      drag = nil
+    callback = function(event)
+      if not drag then return end
+      if event.event == "WinClosed" and tonumber(event.match) ~= drag.source
+        and tonumber(event.match) ~= drag.map then return end
+      -- Stop movement if its window/layout changes, but still consume the
+      -- eventual release. A fresh press can cancel a lost release.
+      drag.cancelled = true
     end,
   })
 end

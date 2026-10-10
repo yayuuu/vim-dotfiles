@@ -37,6 +37,18 @@ function M.prepare(args)
       return show(nodes, state, ...)
     end
     local filesystem = require("neo-tree.sources.filesystem")
+    local manager = require("neo-tree.sources.manager")
+    local path_to_reveal = manager.get_path_to_reveal
+    manager.get_path_to_reveal = function(...)
+      -- Diff documents are named with URIs, not filesystem paths. Following
+      -- those names makes Neo-tree scan nonexistent URI parent directories.
+      local path = vim.b.ide_diff_file
+      if path then return path end
+      if vim.b.ide_diff_before then
+        return api.nvim_buf_get_name(0):match("^git%-before://(.*)$")
+      end
+      return path_to_reveal(...)
+    end
     local navigate = filesystem._navigate_internal
     filesystem._navigate_internal = function(state, ...)
       if inactive(state) then return end
@@ -173,8 +185,15 @@ local function history(tree)
       on_close = function(picker) require("config.vscroll").detach(picker.preview.win.win) end,
       confirm = function(picker) picker:close() end }) end
   end
-  for _, key in ipairs({ "<CR>", "<LeftRelease>", "<2-LeftRelease>" }) do
-    vim.keymap.set({ "n", "i" }, key, open, { buffer = buf, desc = "View commit" })
+  vim.keymap.set({ "n", "i" }, "<CR>", open, { buffer = buf, desc = "View commit" })
+  for _, key in ipairs({ "<LeftRelease>", "<2-LeftRelease>", "<3-LeftRelease>", "<4-LeftRelease>" }) do
+    vim.keymap.set({ "n", "i" }, key, function()
+      if require("config.mouse_capture").active() then return end
+      local row = require("config.panel_mouse").row(vim.fn.getmousepos(), M.history_win)
+      if not row then return end
+      api.nvim_win_set_cursor(M.history_win, { row, 0 })
+      open()
+    end, { buffer = buf, desc = "View commit" })
   end
   vim.keymap.set("n", "<F5>", M.refresh_history, { buffer = buf })
   lines(buf, { " Loading commits…" })

@@ -9,7 +9,8 @@ return {
     filter_kind = { "Class", "Constructor", "Function", "Method", "Interface", "Enum", "Struct" },
     icons = { Class = "C", Constructor = "c", Function = "f", Method = "m", Interface = "I", Enum = "E", Struct = "S" },
     show_guides = true,
-    keymaps = { ["<LeftRelease>"] = "actions.jump", ["<2-LeftMouse>"] = "actions.jump" },
+    keymaps = { ["<LeftRelease>"] = function() require("config.ide").symbols_click() end,
+      ["<2-LeftMouse>"] = function() require("config.ide").symbols_click() end },
     win_opts = { winbar = " Functions / Symbols ", number = false, relativenumber = false,
       foldcolumn = "1", statuscolumn = "%#Normal# " },
   }, config = function(_, opts)
@@ -79,12 +80,16 @@ return {
       { source = "buffers", display_name = "Tabs" },
     } },
     filesystem = { commands = {
-      open = function(state)
-        local node = state.tree and state.tree:get_node()
-        if not node or node.type == "message" then return end
-        require("neo-tree.sources.filesystem.commands").open(state)
-      end,
-    } },
+      rename = function(state) require("config.ide").rename_file(state) end,
+      open = function(state) require("config.files").open(state) end,
+      copy_to_clipboard = function(state) require("config.files").copy(state) end,
+      paste_from_clipboard = function(state) require("config.files").paste(state) end,
+      delete = function(state) require("config.files").delete(state) end,
+    }, window = { mappings = {
+      ["<C-c>"] = "copy_to_clipboard",
+      ["<C-v>"] = "paste_from_clipboard",
+      ["<Del>"] = "delete",
+    } } },
     git_status = { bind_to_cwd = false, cwd_target = { sidebar = "global", current = "global" }, components = {
       name = function(...) return require("config.git").name(...) end,
       git_directory = function(...) return require("config.git").directory(...) end,
@@ -99,6 +104,7 @@ return {
       ["<4-LeftRelease>"] = function(state) require("config.git").click(state) end,
     } } },
     window = { width = 30, mappings = {
+      ["<F2>"] = function() require("config.ide").rename_file() end,
       ["<C-s>"] = function() require("config.ide").save() end,
       ["<C-f>"] = function() require("config.ide").find() end,
       ["<LeftRelease>"] = function() require("config.ide").tree_click() end,

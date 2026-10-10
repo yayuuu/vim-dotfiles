@@ -40,7 +40,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-messages-') as directory:
         position = editor.lua('local s=require("neo-tree.sources.manager").get_state("filesystem");local _,line=s.tree:get_node(...);'
                               'local p=vim.api.nvim_win_get_position(s.winid);return {p[1]+line,p[2]+6}', str(file))
         editor.click(*position)
-        editor.wait(lambda: editor.lua('return vim.api.nvim_get_current_buf()') == mainbuf, 'Real file still opens')
+        editor.wait(lambda: editor.lua('return vim.api.nvim_win_get_buf(require("config.ide").editor_window())') == mainbuf, 'Real file still opens')
+        assert editor.lua('return vim.bo.filetype') == 'neo-tree', 'Files retains keyboard focus'
         print('PASS: hidden-items message clicks, Enter and right-click never create synthetic documents; normal file opening works.')
     finally:
         editor.close()

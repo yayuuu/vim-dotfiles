@@ -68,10 +68,14 @@ function M.open_file(path, buf)
   M.discard_empty_buffers()
   vim.wo.winbar = M.winbar()
   vim.cmd("redrawstatus")
+  M.outline()
 end
 function M.pick_file()
   vim.api.nvim_set_current_win(M.editor_window())
   Snacks.picker.files({ cwd = M.root() })
+end
+function M.rename_file(state)
+  require("config.rename").prompt(state)
 end
 function M.search_project()
   vim.api.nvim_set_current_win(M.editor_window())
@@ -153,7 +157,8 @@ function M.save_buffer(buf, rename, done)
   local function write(path)
     if not vim.api.nvim_buf_is_valid(buf) then return end
     local ok, err = pcall(vim.api.nvim_buf_call, buf, function()
-      vim.cmd(path and ("saveas " .. vim.fn.fnameescape(path)) or "write")
+      if path then vim.cmd("saveas " .. vim.fn.fnameescape(path))
+      else require("config.rename").write(buf) end
     end)
     if ok then require("config.editor_tabs").draw()
     else vim.notify(err, vim.log.levels.ERROR) end
@@ -315,12 +320,23 @@ function M.explorer()
   require("neo-tree.command").execute({ source = "filesystem", action = "focus", dir = M.root() })
   require("config.layout").reflow()
 end
+function M.symbols_click()
+  if require("config.mouse_capture").active() or M.menu_mouse_pending then return end
+  local mouse = vim.fn.getmousepos()
+  if not require("config.panel_mouse").row(mouse) then return end
+  if vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].filetype ~= "aerial" then return end
+  vim.cmd("stopinsert")
+  vim.api.nvim_win_set_cursor(mouse.winid, { mouse.line, 0 })
+  require("aerial").select({ winid = M.editor_window() })
+end
+
 function M.tree_click()
   if require("config.mouse_capture").active() then return end
   if M.menu_mouse_pending or require("config.git").selection_mouse_pending then return end
   local mouse = vim.fn.getmousepos()
   local win = mouse.winid
   if mouse.line < 1 or win == 0 or not vim.api.nvim_win_is_valid(win) then return end
+  if not require("config.panel_mouse").row(mouse, win) then return end
   if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then return end
   -- Mouse presses can move from an editor/terminal into Neo-tree while
   -- keeping Insert/Select mode. Finish that mode before running tree commands.
@@ -358,8 +374,24 @@ end
 function M.help()
   M.open_file(vim.fn.stdpath("config") .. "/KEYBINDS.md")
 end
-function M.popup(items)
+function M.close_menu()
+  local state = package.loaded["menu.state"]
+  local buf = state and state.bufids[1]
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then M.menu_name = nil; return end
+  -- Invoke the menu's existing close action without feeding keys or briefly
+  -- displaying its buffer in the editor during a toolbar switch.
+  for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+    if mapping.lhs == "q" and mapping.callback then
+      M.menu_name = nil
+      mapping.callback()
+      return
+    end
+  end
   require("menu.utils").delete_old_menus()
+  M.menu_name = nil
+end
+function M.popup(items)
+  M.close_menu()
   -- Menu's default mouse mode installs a global click handler that closes
   -- a newly opened toolbar menu when switching between menu headings.
   pcall(vim.keymap.del, "n", "<LeftMouse>")
@@ -387,6 +419,7 @@ function M.popup(items)
   end
   require("menu").open(items, { mouse = false, border = true })
   local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+  M.popup_buffer = buf
   vim.wo[win].winbar = ""
   -- Mouse focus/repeated clicks can preserve Insert or selection mode.
   -- Volt feeds q to dismiss; use its existing close action in these modes too.
@@ -442,12 +475,15 @@ function M.popup(items)
     vim.schedule(function()
       -- Keyboard dismissal must not leave a mouse listener over the old popup.
       -- A mouse action keeps it only until the matching release arrives.
-      if not pressed then vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease")) end
+      if not pressed and M.popup_buffer == buf then
+        M.popup_buffer, M.menu_name = nil, nil
+        vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
+      end
     end)
   end })
   vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = function()
     vim.schedule(function()
-      if vim.api.nvim_buf_is_valid(buf) then require("menu.utils").delete_old_menus() end
+      if vim.api.nvim_buf_is_valid(buf) and M.popup_buffer == buf then M.close_menu() end
     end)
   end })
 end
@@ -455,6 +491,9 @@ function M.context_menu()
   if vim.bo.filetype == "NvMenu" then return end
   local debugger = package.loaded["config.debugger_mouse"]
   local pointer = vim.fn.getmousepos()
+  if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
+    and not M.is_document(vim.api.nvim_win_get_buf(pointer.winid))
+    and not require("config.panel_mouse").row(pointer) then return end
   if debugger and debugger.handles(pointer.winid) then
     debugger.context_menu(pointer.winid, pointer.line)
     return
@@ -497,8 +536,10 @@ function M.context_menu()
       { name = "Open", cmd = function() state.commands.open(state) end },
       { name = "New file", cmd = function() commands.add(state) end },
       { name = "New directory", cmd = function() commands.add_directory(state) end },
-      { name = "Rename", cmd = function() commands.rename(state) end },
-      { name = "Delete...", cmd = function() commands.delete(state) end },
+      { name = "Rename", rtxt = "F2", cmd = function() M.rename_file(state) end },
+      { name = "Copy", rtxt = "Ctrl+C", cmd = function() state.commands.copy_to_clipboard(state) end },
+      { name = "Paste", rtxt = "Ctrl+V", cmd = function() state.commands.paste_from_clipboard(state) end },
+      { name = "Delete...", rtxt = "Delete", cmd = function() state.commands.delete(state) end },
       { name = "separator" },
       { name = "Terminal", rtxt = "Alt+T", cmd = M.terminal },
       { name = "Repository", rtxt = "Alt+G", cmd = function() Snacks.lazygit() end },
@@ -517,7 +558,8 @@ function M.context_menu()
       { name = "Go to definition", cmd = vim.lsp.buf.definition },
       { name = "Find references", cmd = vim.lsp.buf.references },
       { name = "Documentation", cmd = vim.lsp.buf.hover },
-      { name = "Rename symbol", cmd = vim.lsp.buf.rename },
+      { name = "Rename file", rtxt = "F2", cmd = M.rename_file },
+      { name = "Rename symbol", rtxt = "Shift+F2", cmd = vim.lsp.buf.rename },
       { name = "Code actions", cmd = vim.lsp.buf.code_action },
       { name = "Format", cmd = function() require("conform").format({ lsp_fallback = true }) end },
       { name = "separator" },
@@ -538,13 +580,19 @@ function M.outline()
     if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then tree = win; break end
   end
   if not tree then return end
-  -- Aerial tracks the active buffer itself. Reopening its already positioned
-  -- window would briefly change focus and cancel an active text selection.
+  -- Aerial's delayed focus handler may see Files instead of the new document.
+  -- Bind the existing Symbols window explicitly, without reopening its split.
   local treepos = vim.api.nvim_win_get_position(tree)
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "aerial" then
       local pos = vim.api.nvim_win_get_position(win)
-      if pos[2] == treepos[2] and pos[1] > treepos[1] then return end
+      if pos[2] == treepos[2] and pos[1] > treepos[1] then
+        if vim.b[vim.api.nvim_win_get_buf(win)].source_buffer ~= vim.api.nvim_win_get_buf(editor)
+          or vim.w[win].source_win ~= editor then
+          require("aerial").open_in_win(win, editor)
+        end
+        return
+      end
     end
   end
   M.outline_busy = true
@@ -572,7 +620,12 @@ function M.outline()
 end
 local menu_names = { "File", "Edit", "Search", "View", "Project", "Git", "Debug", "Terminal", "Help" }
 function M.menu(name)
+  if M.menu_name == name and M.popup_buffer and vim.api.nvim_buf_is_valid(M.popup_buffer) then
+    M.close_menu()
+    return
+  end
   local selection = capture_selection()
+  M.close_menu()
   vim.api.nvim_set_current_win(M.editor_window())
   local function edit_action(fn)
     return function()
@@ -647,8 +700,8 @@ function M.menu(name)
       item("Health check", cmd("checkhealth")), item("Edit configuration", function() Snacks.picker.files({ cwd = vim.fn.stdpath("config") }) end),
     },
   }
-  require("menu.utils").delete_old_menus()
   M.popup(menus[name])
+  M.menu_name = name
 end
 _G.DesktopIDEMenu = function(id, _, button)
   if button == "l" and menu_names[id] then M.menu(menu_names[id]) end
