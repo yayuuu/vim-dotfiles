@@ -53,6 +53,28 @@ with tempfile.TemporaryDirectory(prefix='nvim-sidebar-scroll-') as directory:
         position = editor.lua('local b=require("config.hscroll").bars[...];local p=vim.api.nvim_win_get_position(b.win);return {p[1],p[2]+vim.api.nvim_win_get_width(b.win)-1}', history)
         editor.click(*position)
         editor.wait(lambda: view(history)['leftcol'] > 0, 'Commit scrollbar click moves content')
+        # A fixed-height native split can still absorb spare rows when the
+        # whole sidebar grows. The scrollbar must remain a single visible row.
+        def compact_bar():
+            return editor.lua('local b=require("config.hscroll").bars[...];'
+                              'if not b or not vim.api.nvim_win_is_valid(b.win) then return false end;'
+                              'local v=vim.api.nvim_win_call(b.win,vim.fn.winsaveview);'
+                              'return vim.api.nvim_win_get_height(b.win)==1 and v.topline==1 and v.leftcol==0', history)
+        for width, height in ((200, 80), (128, 36), (160, 48)):
+            editor.call('nvim_ui_try_resize', width, height)
+            editor.wait(compact_bar, 'Resize keeps the commit scrollbar one row high and unscrolled')
+            editor.wait(lambda: not editor.lua('return require("config.layout").scaling'), 'Resized layout settles')
+            assert compact_bar(), 'Restoring proportions must not enlarge the scrollbar'
+        editor.lua('vim.api.nvim_set_current_win(require("config.ide").editor_window());vim.cmd("stopinsert")')
+        editor.call('nvim_input', 'i')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Insert mode in editor beside commit panel')
+        editor.wait(compact_bar, 'Commit scrollbar stays visible in Insert mode')
+        editor.call('nvim_input', '<Esc>v')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'v', 'Visual mode in editor beside commit panel')
+        editor.wait(compact_bar, 'Commit scrollbar stays visible in Visual mode')
+        editor.call('nvim_input', '<Esc>')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Normal mode in editor beside commit panel')
+        editor.wait(compact_bar, 'Commit scrollbar stays visible in Normal mode')
         editor.lua('require("neo-tree.command").execute({source="buffers",action="focus"})')
         editor.wait(lambda: not editor.lua('local b=require("config.hscroll").bars[...];return b~=nil', history), 'Switching sidebar source cleans up its scrollbar')
         long_file = repo / ('long_document_name_' * 8 + '.txt')
@@ -64,6 +86,6 @@ with tempfile.TemporaryDirectory(prefix='nvim-sidebar-scroll-') as directory:
         position = editor.lua('local b=require("config.hscroll").bars[...];local p=vim.api.nvim_win_get_position(b.win);return {p[1],p[2]+vim.api.nvim_win_get_width(b.win)-1}', tree)
         editor.click(*position)
         editor.wait(lambda: view(tree)['leftcol'] > 0, 'Tree scrollbar click moves document paths')
-        print('PASS: compact sidebar content stays fixed; long symbols/commits get working horizontal bars; scrolling clamps to actual width; source switches clean up bars', flush=True)
+        print('PASS: compact sidebar content stays fixed; long symbols/commits get working one-row bars across resize and editing modes; scrolling clamps to width; source switches clean up bars', flush=True)
     finally:
         editor.close()

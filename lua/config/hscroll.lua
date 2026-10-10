@@ -99,7 +99,8 @@ local function make(win)
     barwin = api.nvim_open_win(buf, false, { split = "below", win = win, height = 1, noautocmd = true })
     api.nvim_win_call(barwin, function() vim.cmd("diffoff") end)
     for key, value in pairs({ number = false, relativenumber = false, signcolumn = "no", statuscolumn = "", winbar = "",
-      winfixheight = true, cursorline = false, scrollbind = false, cursorbind = false, wrap = false }) do vim.wo[barwin][key] = value end
+      winfixheight = true, cursorline = false, scrollbind = false, cursorbind = false, wrap = false,
+      scrolloff = 0, sidescrolloff = 0 }) do vim.wo[barwin][key] = value end
     api.nvim_win_set_height(barwin, 1)
   end)
   diff.busy = busy
@@ -153,6 +154,9 @@ function M.draw(win)
   local bar = M.bars[win]
   if not bar or not valid(bar.win) then bar = make(win) end
   place(win, bar)
+  -- winfixheight is a preference: resizing a column whose other panels are
+  -- fixed can still allocate all spare rows to the scrollbar.
+  if api.nvim_win_get_height(bar.win) ~= 1 then api.nvim_win_set_height(bar.win, 1) end
   local width = api.nvim_win_get_width(bar.win)
   local track = math.max(1, width - 2)
   local thumb = math.max(1, math.min(track, math.floor(track * available / math.max(1, longest))))
@@ -166,6 +170,9 @@ function M.draw(win)
   api.nvim_buf_set_extmark(bar.buf, namespace, 0, #("◀" .. string.rep("─", offset)), {
     end_col = #("◀" .. string.rep("─", offset) .. string.rep("━", thumb)), hl_group = "Visual" })
   vim.bo[bar.buf].modified = false; vim.bo[bar.buf].modifiable = false
+  api.nvim_win_call(bar.win, function()
+    vim.fn.winrestview({ topline = 1, lnum = 1, col = 0, leftcol = 0, skipcol = 0 })
+  end)
 end
 function M.refresh()
   if M.pending or M.running then return end
@@ -183,7 +190,7 @@ function M.refresh()
 end
 function M.setup()
   local group = api.nvim_create_augroup("DesktopHorizontalScroll", { clear = true })
-  api.nvim_create_autocmd({ "BufWinEnter", "TextChanged", "TextChangedI", "WinScrolled", "WinResized", "VimResized", "WinClosed" }, {
+  api.nvim_create_autocmd({ "BufWinEnter", "TextChanged", "TextChangedI", "WinScrolled", "WinResized", "VimResized", "WinClosed", "ModeChanged" }, {
     group = group, callback = function(args)
       if not M.running and not M.syncing and not vim.b[args.buf].ide_hscroll then M.refresh() end
     end,

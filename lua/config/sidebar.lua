@@ -139,7 +139,9 @@ function M.refresh_history()
         local repo = (result.stderr or ""):find("not a git repository", 1, true)
         text = { repo and "Not a Git repository" or "No commits yet" }
       end
-      lines(buf, #text > 0 and text or { "No commits yet" })
+      if #text == 0 then text = { "No commits yet" } end
+      for row, value in ipairs(text) do text[row] = " " .. value end
+      lines(buf, text)
       M.commits = commits
       local ns = api.nvim_create_namespace("DesktopCommitGraph")
       api.nvim_buf_clear_namespace(buf, ns, 0, -1)
@@ -175,7 +177,7 @@ local function history(tree)
     vim.keymap.set({ "n", "i" }, key, open, { buffer = buf, desc = "View commit" })
   end
   vim.keymap.set("n", "<F5>", M.refresh_history, { buffer = buf })
-  lines(buf, { "Loading commits…" })
+  lines(buf, { " Loading commits…" })
   M.refresh_history()
 end
 
