@@ -36,7 +36,13 @@ with tempfile.TemporaryDirectory(prefix='nvim-editor-controls-') as directory:
         editor.call('nvim_input_mouse','left','release','',0,bar['row'],bar['col']+2)
         editor.wait(lambda: horizontal(bar['source'])<10, 'Thumb drag returns to start')
         editor.lua('require("config.diff").open(...)',str(file))
-        editor.wait(lambda: bar_info('left') and bar_info('right'), 'Each comparison column has a scrollbar')
+        editor.wait(lambda: bar_info('left') and bar_info('right') and editor.lua(
+            'local d=require("config.diff").active;local h=require("config.hscroll");'
+            'if require("config.layout").scaling then return false end;'
+            'for _,w in ipairs({d.left,d.right}) do local b=h.bars[w];local p=vim.api.nvim_win_get_position(w);'
+            'local bp=vim.api.nvim_win_get_position(b.win);if bp[2]~=p[2] '
+            'or vim.api.nvim_win_get_width(b.win)~=vim.api.nvim_win_get_width(w) then return false end end;return true'),
+            'Each comparison scrollbar settles after layout resizing')
         right=bar_info('right');left=bar_info('left')
         editor.click(right['row'],right['col']+right['width']*3//4)
         editor.wait(lambda: horizontal(right['source'])>25 and horizontal(right['source'])==horizontal(left['source']), 'Diff bars synchronize')

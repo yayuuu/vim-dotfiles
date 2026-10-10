@@ -73,7 +73,10 @@ function M.set(win, column)
       -- Neovim keeps the caret in the viewport. Move it by the scroll delta,
       -- just as its native zl/zh commands do, or redraw undoes the scroll.
       local _, available = extent(target)
-      local margin = math.min(vim.wo.sidescrolloff, math.floor(available / 3))
+      local viewport = api.nvim_win_get_width(target) - vim.fn.getwininfo(target)[1].textoff
+      -- Match Neovim's native cursor margin. A smaller margin makes redraw
+      -- scroll back again, particularly in narrow diff columns.
+      local margin = math.min(vim.wo.sidescrolloff, math.floor(viewport / 2))
       local current = vim.fn.virtcol(".") - 1
       local offset = math.max(margin, math.min(available - margin - 1, current - view.leftcol))
       local wanted = column + offset
@@ -272,8 +275,12 @@ function M.setup()
       -- outside the terminal. Do not consume a file click as an old bar drag.
       for source, bar in pairs(M.bars) do
         if mouse.winid == bar.win then
-          M.drag = { source = source, bar = bar, grab = mouse.wincol >= bar.start and mouse.wincol < bar.start + bar.thumb
-            and mouse.wincol - bar.start or math.floor(bar.thumb / 2) }
+          local on_thumb = mouse.wincol >= bar.start and mouse.wincol < bar.start + bar.thumb
+          local grab = on_thumb and mouse.wincol - bar.start or math.floor(bar.thumb / 2)
+          M.drag = { source = source, bar = bar, pointer = mouse.screencol,
+            column = on_thumb and api.nvim_win_call(source, vim.fn.winsaveview).leftcol
+              or (mouse.wincol - 1 - grab) / math.max(1, bar.span) * bar.maximum,
+            scale = bar.maximum / math.max(1, bar.span) }
           capture.claim(M.drag)
           break
         end
@@ -283,8 +290,10 @@ function M.setup()
     if not drag then return end
     local bar = drag.bar
     if valid(bar.win) then
-      local col = mouse.screencol - api.nvim_win_get_position(bar.win)[2]
-      local target = (col - 1 - drag.grab) / math.max(1, bar.span) * bar.maximum
+      -- Anchor to the exact view offset, rather than the rounded thumb cell.
+      -- The rendered thumb loses precision when many text columns fit a cell;
+      -- recalculating from it makes a stationary grab/release jump backwards.
+      local target = drag.column + (mouse.screencol - drag.pointer) * drag.scale
       vim.schedule(function() M.set(drag.source, target) end)
     end
     if kind == "Release" then capture.release(drag); M.drag = nil end

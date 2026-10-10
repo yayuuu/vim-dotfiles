@@ -50,6 +50,9 @@ or perform operations on the user's actual repositories independently.
   views are exceptions: preserve their own tabpage and tool layout.
   Document routing and our own bars must not rebuild these views.
 - Save proportions after dragging separators and restore them at startup.
+  The blank-panel mouse guard must let native vertical divider drags through:
+  Neovim may report the divider as the left window with line 0 and a column
+  beyond its width. Preserve resizing beside both empty lists and scrollbars.
   Window resizing scales panels proportionally while enforcing minimum dimensions;
   enlarging the window restores the chosen proportions. Account for window roles
   and the order of width changes, especially for the tree and terminal list.
@@ -283,6 +286,10 @@ or perform operations on the user's actual repositories independently.
   without `E976: Using a Blob as a String`. Replace them with visible `^@` only
   for measurement; preserve the original buffer bytes and working scrollbars
   after switching to the next file.
+- Horizontal scrollbar dragging anchors to the exact initial view offset and
+  pointer position, not the rounded thumb cell. Match Neovim's native cursor
+  margin so redraw does not undo scrolling in narrow diff columns. Grabbing or
+  releasing a stationary thumb must not shift the view; both sides stay aligned.
 - Vertical wheel scrolling over either side of an added-file diff moves the
   populated comparison. Do not let the empty read-only baseline's cursor force
   the editable side back to the start. Tool-panel scrolling beside a Select-mode
@@ -472,8 +479,10 @@ Run a single scenario:
   Top menu switching and repeated-heading clicks → `menu_switch.py`.
   Command input geometry while completion is visible → `cmdline_popup.py`.
   Command-line save/close without destroying editor panels → `write_close.py`.
+  Vertical sidebar dividers beside blank lists and scrollbars → `sidebar_resize.py`.
   Icon/letter preferences and invalid/missing settings fallback → `settings.py`.
   Added-file diff wheel scrolling and Select-mode panel scrolling → `diff_vertical_scroll.py`.
+  Precise horizontal diff dragging in Normal/Insert → `diff_horizontal_drag.py`.
   Files following/revealing diff documents → `diff_files_tree.py`.
   Minimap gestures and immediate viewport updates → `minimap_drag.py`.
   Minimap/horizontal drag releases over other controls → `scroll_drag_capture.py`.

@@ -52,12 +52,17 @@ function M.setup()
     local win = mouse.winid
     if win == 0 or not api.nvim_win_is_valid(win) then return end
     local buf, config = api.nvim_win_get_buf(win), api.nvim_win_get_config(win)
+    -- Neovim reports a native vertical separator as belonging to the window
+    -- on its left, with line=0 and wincol=width+1. It is not blank list space.
+    local position = api.nvim_win_get_position(win)
+    if config.relative == "" and (mouse.screencol <= position[2]
+      or mouse.screencol > position[2] + api.nvim_win_get_width(win)) then return end
     -- Editors and terminal/console bodies accept cursor/input clicks anywhere.
     if vim.bo[buf].buftype == "terminal" or vim.bo[buf].buftype == "prompt" or vim.b[buf].ide_git_input
       or vim.bo[buf].filetype == "dap-repl" or vim.b[buf].ide_hscroll or vim.b[buf].ide_vscroll
       or vim.b[buf].ide_editor_tabs or vim.b[buf].ide_diff_before or vim.b[buf].ide_diff_file
       or (config.relative == "" and require("config.ide").is_document(buf)) then return end
-    local top = api.nvim_win_get_position(win)[1] + 1 + (vim.wo[win].winbar ~= "" and 1 or 0)
+    local top = position[1] + 1 + (vim.wo[win].winbar ~= "" and 1 or 0)
     -- Preserve titles, tab selectors, borders, and resize separators.
     if mouse.screenrow < top or mouse.screenrow >= top + vim.fn.getwininfo(win)[1].height then return end
     local row = M.row(mouse, win)
