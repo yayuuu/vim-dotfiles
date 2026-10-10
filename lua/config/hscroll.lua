@@ -226,6 +226,9 @@ function M.setup()
     if not kind then return end
     local mouse = vim.fn.getmousepos()
     if kind == "Mouse" then
+      -- A new press starts a new gesture even if the previous release was lost
+      -- outside the terminal. Do not consume a file click as an old bar drag.
+      M.drag = nil
       for source, bar in pairs(M.bars) do
         if mouse.winid == bar.win then
           M.drag = { source = source, bar = bar, grab = mouse.wincol >= bar.start and mouse.wincol < bar.start + bar.thumb

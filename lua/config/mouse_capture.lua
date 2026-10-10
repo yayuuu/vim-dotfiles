@@ -12,6 +12,9 @@ end
 function M.active() return M.owner ~= nil end
 function M.blocked(key, typed) return M.active() and (events[key] or events[typed]) end
 function M.claim(owner) M.owner = owner end
+function M.cancel(owner)
+  if M.owner == owner then M.owner = nil end
+end
 function M.release(owner)
   -- All on_key listeners and buffer-local release mappings must still see
   -- the capture during this event, regardless of their registration order.

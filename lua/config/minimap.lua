@@ -1,9 +1,34 @@
 local M = {}
 local api = vim.api
 local drag
+local viewport_namespace = api.nvim_create_namespace("DesktopMinimapViewport")
 
 local function clamp(value, low, high)
   return math.max(low, math.min(value, high))
+end
+
+-- Viewport highlights are cheap to update and must not wait for the plugin's
+-- debounce used to regenerate code, syntax colors, and other annotations.
+function M.refresh_viewport(buffer)
+  local minimap = require("neominimap.buffer")
+  local coord = require("neominimap.map.coord")
+  for _, buf in ipairs(buffer and { buffer } or minimap.list_buffers()) do
+    local mapbuf = minimap.get_minimap_bufnr(buf)
+    if mapbuf and api.nvim_buf_is_valid(mapbuf) then
+      api.nvim_buf_clear_namespace(mapbuf, viewport_namespace, 0, -1)
+      local count = api.nvim_buf_line_count(mapbuf)
+      for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        if api.nvim_win_get_config(win).relative == "" then
+          local info = vim.fn.getwininfo(win)[1]
+          local first = coord.codepoint_to_mcodepoint(info.topline, 1)
+          local last = coord.codepoint_to_mcodepoint(info.botline, 1)
+          first, last = clamp(first, 1, count), clamp(last, 1, count)
+          api.nvim_buf_set_extmark(mapbuf, viewport_namespace, first - 1, 0,
+            { end_row = last, end_col = 0, hl_group = "DesktopMinimapViewport", hl_eol = true, priority = 90 })
+        end
+      end
+    end
+  end
 end
 
 local function apply(state, screenrow)
@@ -29,11 +54,14 @@ local function apply(state, screenrow)
     vim.cmd.normal({ vim.keycode("<Esc>"), bang = true })
   end
   local view = vim.fn.winsaveview()
+  local margin = math.min(vim.wo[state.source].scrolloff, math.floor((state.height - 1) / 2))
+  local offset = clamp(state.cursor_offset, margin, state.height - margin - 1)
   view.topline = top
-  view.lnum = clamp(top + state.cursor_offset, top, count)
+  view.lnum = clamp(top + offset, top, count)
   view.col = state.column
   view.topfill, view.skipcol = 0, 0
   vim.fn.winrestview(view)
+  M.refresh_viewport(state.buffer)
   -- Clicking from a sidebar/terminal returns directly to typing in the code.
   if state.insert and vim.fn.mode() == "n" then
     vim.cmd.startinsert()
@@ -106,10 +134,17 @@ function M.setup()
     if not drag then
       return
     end
-    local state, row = drag, mouse.screenrow
-    vim.schedule(function()
-      apply(state, row)
-    end)
+    local state = drag
+    state.latest_row = mouse.screenrow
+    -- Collapse queued movements into the latest position so a fast drag
+    -- cannot build up stale scroll operations behind the pointer.
+    if not state.pending then
+      state.pending = true
+      vim.schedule(function()
+        state.pending = false
+        apply(state, state.latest_row)
+      end)
+    end
     if kind == "Release" then
       drag = nil
     end

@@ -117,6 +117,12 @@ function M.setup()
     local kind, wheel = events[typed] or events[key], wheels[typed] or wheels[key]
     if not kind and not wheel then return end
     local mouse = vim.fn.getmousepos()
+    if kind == "Mouse" then
+      -- The host may miss a release outside its window. The next press must
+      -- release the old capture before starting another independent gesture.
+      capture.cancel(M.drag)
+      M.drag = nil
+    end
     for source, state in pairs(M.sources) do
       if state.bar and mouse.winid == state.bar.win then
         if wheel then

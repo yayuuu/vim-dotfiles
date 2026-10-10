@@ -100,8 +100,10 @@ return {
     window = { width = 30, mappings = {
       ["<C-s>"] = function() require("config.ide").save() end,
       ["<C-f>"] = function() require("config.ide").find() end,
-      ["<LeftRelease>"] = "open", ["<2-LeftRelease>"] = "open",
-      ["<3-LeftRelease>"] = "open", ["<4-LeftRelease>"] = "open",
+      ["<LeftRelease>"] = function() require("config.ide").tree_click() end,
+      ["<2-LeftRelease>"] = function() require("config.ide").tree_click() end,
+      ["<3-LeftRelease>"] = function() require("config.ide").tree_click() end,
+      ["<4-LeftRelease>"] = function() require("config.ide").tree_click() end,
       -- Consume repeated presses so Vim doesn't start word/line selection.
       ["<2-LeftMouse>"] = function() end,
       ["<3-LeftMouse>"] = function() end,

@@ -102,6 +102,10 @@ or perform operations on the user's actual repositories independently.
 - Files contains the tree and Functions / Symbols (Aerial). Clicking opens a file
   or expands/collapses a directory. When there are no symbols, show only a brief
   **No symbols** message; backend diagnostics remain available through `:AerialInfo`.
+- File clicks must work from Normal, Insert, Visual, Select, and terminal input,
+  including repeated clicks. Resolve the row under the pointer instead of relying
+  on the previous tree cursor. A new mouse press cancels an unfinished scrollbar
+  gesture: a release lost outside the host must not swallow the next file click.
 - Neo-tree rows of type `message`, such as `(3 hidden items)`, are not files.
   Clicking, Enter, and menu actions must not open their synthetic identifiers.
 - View > Project files shows and selects Files without adding splits.
@@ -238,6 +242,10 @@ or perform operations on the user's actual repositories independently.
 - The minimap shows structure, visible range, cursor, diagnostics, Git,
   and search. Clicking moves the cursor; the mouse wheel and dragging scroll.
   Do not extend it into terminals or left panels; hide it when the editor is narrow.
+  Refresh the visible-range highlight immediately while scrolling or dragging,
+  separately from the debounce for regenerating minimap text. Coalesce queued
+  movements to the latest pointer position and respect the source's scrolloff
+  margin so redraw does not shift the viewport again after moving the cursor.
 
 ## Module map and state
 
@@ -301,7 +309,9 @@ Run a single scenario:
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`;
   editing → `comment_selection.py`; document creation → `new_file.py`;
-  informational tree rows → `tree_messages.py`.
+  informational tree rows → `tree_messages.py`; file clicks across modes and
+  recovery after a lost scrollbar release → `tree_click.py`.
+  Minimap gestures and immediate viewport updates → `minimap_drag.py`.
 - Check visible behavior and actual gestures. For regressions, consider a test
   that fails before the fix. Documentation-only changes do not require the full UI suite.
   Run `git diff --check`.

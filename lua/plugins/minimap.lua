@@ -89,14 +89,8 @@ return {
               {
                 event = { "WinScrolled", "WinResized", "BufWinEnter" },
                 opts = {
-                  get_buffers = function()
-                    local buffers = {}
-                    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-                      if vim.api.nvim_win_get_config(win).relative == "" then
-                        buffers[#buffers + 1] = vim.api.nvim_win_get_buf(win)
-                      end
-                    end
-                    return buffers
+                  callback = function()
+                    require("config.minimap").refresh_viewport()
                   end,
                 },
               },
