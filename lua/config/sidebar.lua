@@ -73,7 +73,7 @@ local function list_window(filetype, title, tree)
   local win = api.nvim_open_win(buf, false, { split = "below", win = tree,
     height = math.min(14, math.max(5, math.floor(vim.o.lines * 0.3))) })
   for key, value in pairs({ number = false, relativenumber = false, signcolumn = "no", foldcolumn = "0",
-    statuscolumn = "", wrap = false, winfixheight = true, winfixwidth = true, cursorline = true }) do
+    statuscolumn = "", wrap = false, list = false, winfixheight = true, winfixwidth = true, cursorline = true }) do
     vim.wo[win][key] = value
   end
   vim.wo[win].winhighlight = "Normal:NeoTreeNormal,CursorLine:NeoTreeCursorLine,EndOfBuffer:NeoTreeEndOfBuffer"

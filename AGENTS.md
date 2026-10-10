@@ -108,6 +108,8 @@ or perform operations on the user's actual repositories independently.
 - Git contains the status and graph starting at HEAD. Tabs lists documents, including
   diffs, without terminals, internal HEAD buffers, or helper buffers.
   Leave one character of left padding before each commit graph row.
+  Disable whitespace markers in the commit list: trailing graph spaces must not
+  appear as extra dashes beside branch connections.
   Render the commit graph with Unicode nodes, lines, and rounded branch turns
   (`●`, `│`, `─`, `╭`, `╮`, `╰`, `╯`) instead of ASCII or diagonal strokes.
   Combine turns with existing lanes at junctions. Convert only the graph prefix; preserve commit subjects,
