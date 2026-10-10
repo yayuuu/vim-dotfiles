@@ -83,8 +83,15 @@ or perform operations on the user's actual repositories independently.
   Commit message or another tool must not make separators inherit that tool's background.
 - After a successful save, immediately remove the unsaved-change marker, including
   from both representations of a file in a diff. Keep the marker if saving fails.
+- Diagnostic counters in document tabs use `` for errors and `` for warnings
+  instead of E/W letters. Preserve their counts and diagnostic highlights.
 - Closing a modified document offers Save / Don't save / Cancel;
   saving a new document prompts for a name.
+- Interactive `:wq` / `:wquit` in the editor save and close the current document
+  using the shared document actions, preserving the editor window, other tabs,
+  and tool panels. Keep the document open if saving fails or is canceled;
+  closing the last document leaves a blank editor. Preserve native commands
+  outside the workspace and in managed Diffview tabpages.
 
 ## Editing and mouse support
 
@@ -123,9 +130,24 @@ or perform operations on the user's actual repositories independently.
   `Copy (2) of name`, etc., without overwriting existing files. Keep copies binary-safe,
   retain the file clipboard for repeated pastes, and preserve unsaved editor contents.
   Clicking the editor/tab moves keyboard focus to it and enters Insert mode.
+  File-type icons use mini.icons in `glyph` mode rather than letter badges.
+  Rendering requires a font with Nerd Fonts symbols; keep this independent of
+  the terminal/GUI and do not change its font as part of Neovim configuration.
+  Directory expanders use filled triangles: `▸` collapsed and `▾` expanded.
+  Folder icons use `` closed and `` open, including empty folders,
+  instead of plus/minus signs.
+  Files indicates Git status through name colors. Hide added/modified/deleted,
+  renamed/untracked/ignored, staged and unstaged markers in this source only;
+  retain conflict markers, diagnostics, file-type icons, and unsaved-change marks.
+  The dedicated Git source keeps its status markers.
   Symbols follows the displayed editor document immediately after opening it,
   even while Files retains keyboard focus. Bind Aerial's existing window through
   its public API; preserve the layout, selection, and focused panel.
+  The symbol containing the editor cursor is bold with the same background as
+  the selected file row, using `ui_bar_background` through Aerial's highlights.
+  Cursor tracking also runs in Insert mode: update position/highlights on
+  `CursorMovedI` through the same Aerial window integration, preserving editor
+  focus and mode and scrolling the active symbol into view.
   When there are no symbols, show only a brief
   **No symbols** message; backend diagnostics remain available through `:AerialInfo`.
   Symbols and all four Debug sections have one fixed blank column on both the
@@ -281,6 +303,9 @@ or perform operations on the user's actual repositories independently.
   Other mouse listeners and release mappings must honor the capture; clear it
   after all handlers for the release event have finished.
 - Staged Changes and Changes are separate and initially expanded.
+  Use the same filled `▸` / `▾` section expanders as Files, file-type glyphs,
+  and glyph badges for Git change statuses. Preserve the original status codes
+  in node data for staging, diffs, renames, and selection; icons are presentation.
   The Git Status title and Commit message input stay pinned; scrolling and the
   vertical scrollbar begin below them at Staged Changes. Preserve the commit
   input's width; it is part of the header and does not overlap the scrollbar.
@@ -312,6 +337,11 @@ or perform operations on the user's actual repositories independently.
 
 ## Dialogs, pickers, and minimap
 
+- `settings.json` contains plain user preferences. Its boolean `icons` switch
+  selects glyph icons (true) or standard letters/symbols (false) for file types,
+  folders, tree expanders, Git status markers, and diagnostics in Files/tabs. Load it once
+  through `config.settings`; restart Neovim after editing. Default to icons when
+  missing; warn and fall back safely if malformed. Keep palette colors separate.
 - Keep the complete editable palette in
   `palette.json` as a plain list of color names and values, with no code:
   theme tokens for backgrounds/syntax/diagnostics/Git,
@@ -346,6 +376,9 @@ or perform operations on the user's actual repositories independently.
 - Command palette and Edit configuration have consistent dividers: input must not
   overlap the preview separator, and the bottom must not have a double border.
   Preserve geometry after resizing; floating window configuration must include `relative`.
+  Noice/Nui command inputs may use a separate border/padding window. Do not add
+  another native border to their content window: completion must keep text in
+  its original frame and place suggestions below it.
 - The minimap shows structure, visible range, cursor, diagnostics, Git,
   and search. Clicking moves the cursor; the mouse wheel and dragging scroll.
   Do not extend it into terminals or left panels; hide it when the editor is narrow.
@@ -377,6 +410,7 @@ or perform operations on the user's actual repositories independently.
 | `panel_mouse.lua` | Rendered row validation and blank panel mouse gestures |
 | `panel_padding.lua` | Fixed Symbols and Debug margins using window options and decorations |
 | `colors.lua`, root `palette.json` and `default.json` | Active/original palette data, loader, theme/status bar options, and our highlight overrides |
+| `settings.lua`, root `settings.json` | User preferences and the icons/letters switch |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
 | `tests/ui.py`, `tests/*.py`, `tests.sh` | UI/RPC client and regression scenarios |
@@ -430,11 +464,15 @@ Run a single scenario:
   Empty Git Status clicks → `git_empty_click.py`.
   File clipboard/focus and deletion → `file_clipboard.py`.
   Immediate Symbols refresh → `symbols_refresh.py`; vertical boundaries → `sidebar_vertical_scroll.py`.
+  Symbols following cursor movement in Normal/Insert → `symbols_follow.py`.
   Automatic vertical bars and combined-axis geometry → `panel_scrollbars.py`.
   Terminal scrollback gestures, wheel boundaries, and return to input → `terminal_scrollbar.py`.
   Empty panel/list clicks → `panel_empty_click.py`.
   Dialog layers and pinned Git header → `scrollbar_layering.py`.
   Top menu switching and repeated-heading clicks → `menu_switch.py`.
+  Command input geometry while completion is visible → `cmdline_popup.py`.
+  Command-line save/close without destroying editor panels → `write_close.py`.
+  Icon/letter preferences and invalid/missing settings fallback → `settings.py`.
   Added-file diff wheel scrolling and Select-mode panel scrolling → `diff_vertical_scroll.py`.
   Files following/revealing diff documents → `diff_files_tree.py`.
   Minimap gestures and immediate viewport updates → `minimap_drag.py`.

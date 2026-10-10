@@ -9,7 +9,30 @@ local function routable(win, buf)
     and not vim.wo[win].diff and require("config.ide").is_document(buf)
 end
 
+function M.write_close_command(command)
+  local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+  if vim.fn.getcmdtype() == ":" and vim.fn.getcmdline():match("^%s*" .. command .. "$")
+    and #api.nvim_list_uis() > 0 and api.nvim_win_get_config(win).relative == ""
+    and not require("config.ide").is_tool_tab()
+    and (vim.bo[buf].buftype == "" or vim.b[buf].ide_diff_file) then
+    return "WriteCloseDocument"
+  end
+  return command
+end
+
 function M.setup()
+  api.nvim_create_user_command("WriteCloseDocument", function()
+    local ide = require("config.ide")
+    local buf = api.nvim_win_get_buf(ide.editor_window())
+    ide.save_buffer(buf, false, function(saved)
+      if saved then ide.close_buffer(buf) end
+    end)
+  end, { desc = "Save and close the current document" })
+  -- Native :wq closes a split, including our shared editor and its tab strip.
+  -- Redirect only standalone interactive commands in the managed workspace.
+  for _, command in ipairs({ "wq", "wquit" }) do
+    vim.cmd(("cnoreabbrev <expr> %s v:lua.require'config.documents'.write_close_command('%s')"):format(command, command))
+  end
   api.nvim_create_autocmd({ "BufWinEnter", "FileType", "WinNew" }, {
     group = api.nvim_create_augroup("DesktopDocuments", { clear = true }),
     callback = function()

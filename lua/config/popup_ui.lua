@@ -43,10 +43,12 @@ function M.refresh()
       local borderless = not config.border or config.border == "none"
       -- Snacks already positions its panes and borders inside the layout root.
       -- Adding a root border afterwards shifts every pane and duplicates edges.
-      if borderless and not layout_window then
+      -- Noice/Nui can render padding and borders in a separate window. Its
+      -- borderless content is already framed; another border moves the text.
+      if borderless and not layout_window and ft ~= "noice" then
         api.nvim_win_set_config(win, { border = "rounded" })
       end
-      local row = borderless and layout_window and 0 or -1
+      local row = borderless and (layout_window or ft == "noice") and 0 or -1
       local col = math.max(0, config.width - (row == 0 and 4 or 3))
       local button = M.buttons[win]
       if not button or not valid(button.win) then

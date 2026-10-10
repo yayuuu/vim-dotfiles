@@ -15,12 +15,13 @@ with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
                        'local ns=vim.api.nvim_create_namespace("TabSeparatorDiagnostics");'
                        'vim.diagnostic.set(ns,vim.api.nvim_get_current_buf(),{'
                        '{lnum=0,col=0,severity=vim.diagnostic.severity.WARN,message="First warning"},'
-                       '{lnum=0,col=1,severity=vim.diagnostic.severity.WARN,message="Second warning"}})', str(file))
+                       '{lnum=0,col=1,severity=vim.diagnostic.severity.WARN,message="Second warning"},'
+                       '{lnum=0,col=2,severity=vim.diagnostic.severity.ERROR,message="An error"}})', str(file))
         editor.call('nvim_input', '\x1b')
         editor.wait(lambda: editor.lua('return vim.api.nvim_get_mode().mode') == 'n', 'Normal mode updates diagnostic counters')
         editor.lua('require("config.editor_tabs").draw()')
         editor.wait(lambda: editor.lua('local t=require("config.editor_tabs");return t.buf and '
-                                      'vim.api.nvim_buf_get_lines(t.buf,0,1,false)[1]:find("W 2",1,true)~=nil'), 'Warning counters displayed')
+                                      'vim.api.nvim_buf_get_lines(t.buf,0,1,false)[1]:find(" 2",1,true)~=nil'), 'Warning icons and counters displayed')
 
         def check_strip():
             result = editor.lua('local t=require("config.editor_tabs");'
@@ -43,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
                 assert any(hit['last'] == column - 1 for hit in hits)
                 if column < len(line):
                     assert any(hit['first'] == column + 1 for hit in hits)
-            # Unhighlighted spacer cells used to expose the fill background after W 2.
+            # Unhighlighted spacer cells used to expose the fill background after counters.
             for card_id in ids:
                 card_hits = [hit for hit in hits if hit['id'] == card_id]
                 start = min(hit['first'] for hit in card_hits) - 1
@@ -55,7 +56,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
                 assert len(backgrounds) == 1 and None not in backgrounds, (card, backgrounds, marks)
                 covered = {byte for mark in marks for byte in range(mark['first'], mark['last'])}
                 assert all(byte in covered for byte in range(before, after)), (card, marks)
-            assert 'W 2' in line, line
+            assert ' 2' in line and ' 1' in line, line
+            assert 'W 2' not in line and 'E 1' not in line, line
             assert editor.lua('local t=require("config.editor_tabs");local sep=vim.api.nvim_get_hl(0,{name="DesktopTabSeparator",link=false});'
                               'return sep.fg==vim.api.nvim_get_hl(0,{name="Normal",link=false}).bg and '
                               'sep.bg==vim.api.nvim_get_hl(0,{name="BufferLineBackground",link=false}).bg and '
@@ -77,6 +79,6 @@ with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
             check_strip()
             assert editor.lua('return vim.api.nvim_get_current_buf()') == current
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
-        print('PASS: W 2 counters keep uniform card backgrounds; separators only between cards during repeated mouse scrolling', flush=True)
+        print('PASS: error/warning icons and counters keep uniform card backgrounds; separators only between cards during repeated mouse scrolling', flush=True)
     finally:
         editor.close()

@@ -1,11 +1,13 @@
 local M = { name = "git_status", display_name = "Git" }
 M.default_config = {
   renderers = {
-    directory = { { "git_directory" } }, git_section = { { "git_section" } },
-    file = { { "git_file" } }, git_commit = { { "git_text" } }, git_commit_action = { { "git_text" } },
+    directory = { { "git_directory" } },
+    git_section = { { "indent", with_expanders = true }, { "git_section" } },
+    file = { { "icon" }, { "git_file" } }, git_commit = { { "git_text" } }, git_commit_action = { { "git_text" } },
     git_header_spacer = { { "git_text" } },
   },
 }
+local status_icons = { A = "", M = "", D = "", R = "", C = "", ["?"] = "", U = "" }
 M.components = vim.tbl_extend("force", require("neo-tree.sources.git_status.components"), {
   git_directory = function(...) return require("config.git").directory(...) end,
   git_section = function(_, node)
@@ -15,7 +17,8 @@ M.components = vim.tbl_extend("force", require("neo-tree.sources.git_status.comp
   git_file = function(_, node)
     local status = node.extra.status
     local hl = (status == "?" or status == "A") and "GitSignsAdd" or status == "D" and "GitSignsDelete" or "GitSignsChange"
-    return { text = status .. " " .. node.name, highlight = hl }
+    local marker = require("config.settings").icons and status_icons[status] or status
+    return { text = (marker or status) .. " " .. node.name, highlight = hl }
   end,
 })
 M.commands = vim.tbl_extend("force", require("neo-tree.sources.git_status.commands"), {

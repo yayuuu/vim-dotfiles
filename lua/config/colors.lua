@@ -28,6 +28,8 @@ function M.highlights()
     DapUIEndOfBuffer = { link = 'EndOfBuffer' },
     AerialNormal = { link = 'Normal' },
     AerialNormalNC = { link = 'Normal' },
+    AerialLine = { bg = p.ui_bar_background, bold = true },
+    AerialLineNC = { link = 'AerialLine' },
     DiffAdd = { bg = p.diff_added_bg },
     DiffDelete = { bg = p.diff_deleted_bg, fg = p.diff_deleted_fg },
     DiffChange = { bg = p.diff_changed_bg },

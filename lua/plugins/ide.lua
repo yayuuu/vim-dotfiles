@@ -1,3 +1,7 @@
+local use_icons = require("config.settings").icons
+local diagnostics_icons = use_icons
+  and { Error = " ", Warn = " ", Hint = "󰌵 ", Info = " " }
+  or { Error = "E ", Warn = "W ", Hint = "H ", Info = "I " }
 return {
   { "stevearc/aerial.nvim", lazy = false, opts = {
     backends = { "treesitter", "lsp", "markdown" },
@@ -23,6 +27,18 @@ return {
       return render_centered_text(buf, text)
     end
     local window = require("aerial.window")
+    vim.api.nvim_create_autocmd("CursorMovedI", {
+      group = vim.api.nvim_create_augroup("DesktopSymbolsPosition", { clear = true }),
+      callback = function(event)
+        local ide = require("config.ide")
+        if require("config.sidebar").symbols_enabled() and ide.is_document(event.buf)
+          and not ide.is_tool_tab() and vim.api.nvim_win_get_config(0).relative == "" then
+          -- Aerial listens to CursorMoved only; keep the same cursor/highlight
+          -- update when editing without reopening or reparsing the outline.
+          window.update_position(0, 0)
+        end
+      end,
+    })
     local open = window.open_aerial_in_win
     local pending = false
     window.open_aerial_in_win = function(...)
@@ -51,13 +67,12 @@ return {
   { "LazyVim/LazyVim", opts = {
     colorscheme = "vscode",
     icons = {
-      diagnostics = { Error = "E ", Warn = "W ", Hint = "H ", Info = "I " },
+      diagnostics = diagnostics_icons,
       git = { added = "+", modified = "~", removed = "-" },
       dap = { Stopped = { ">", "DiagnosticWarn", "DapStoppedLine" }, Breakpoint = "●", BreakpointCondition = "?", BreakpointRejected = "x", LogPoint = "L" },
     },
   } },
-  -- ASCII file badges work with the existing Unifont in kmscon.
-  { "nvim-mini/mini.icons", opts = { style = "ascii" } },
+  { "nvim-mini/mini.icons", opts = { style = use_icons and "glyph" or "ascii" } },
   { "nvim-neo-tree/neo-tree.nvim", opts = {
     sources = { "config.project_source", "filesystem", "config.debug_source", "config.git_source", "config.tab_source" },
     close_if_last_window = false,
@@ -117,13 +132,22 @@ return {
       ["<4-LeftMouse>"] = function() end,
     } },
     default_component_configs = {
-      icon = { folder_closed = "+", folder_open = "-", folder_empty = "+", default = "·" },
-      indent = { expander_collapsed = ">", expander_expanded = "v" },
-      git_status = { symbols = { added = "+", modified = "~", deleted = "-", renamed = "R", untracked = "?", ignored = "!", unstaged = "~", staged = "+", conflict = "!" } },
+      icon = { folder_closed = use_icons and "" or "+", folder_open = use_icons and "" or "-",
+        folder_empty = use_icons and "" or "+", folder_empty_open = use_icons and "" or "-", default = "·" },
+      indent = { expander_collapsed = use_icons and "▸" or ">", expander_expanded = use_icons and "▾" or "v" },
+      diagnostics = { symbols = { error = vim.trim(diagnostics_icons.Error), warn = vim.trim(diagnostics_icons.Warn),
+        hint = vim.trim(diagnostics_icons.Hint), info = vim.trim(diagnostics_icons.Info) } },
+      -- Files uses Git name colors; the dedicated Git source renders its own markers.
+      git_status = { symbols = { added = "", modified = "", deleted = "", renamed = "", untracked = "",
+        ignored = "", unstaged = "", staged = "", conflict = use_icons and "" or "!" } },
     },
   } },
   { "akinsho/bufferline.nvim", opts = { options = {
     always_show_bufferline = true, show_buffer_icons = false,
+    diagnostics_indicator = function(_, _, diagnostics)
+      return vim.trim((diagnostics.error and diagnostics_icons.Error .. diagnostics.error .. " " or "")
+        .. (diagnostics.warning and diagnostics_icons.Warn .. diagnostics.warning or ""))
+    end,
     persist_buffer_sort = false,
     sort_by = function(a,b) return require("config.tabs").compare(a,b) end,
     separator_style = "thin", buffer_close_icon = "×", close_icon = "×",
