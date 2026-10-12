@@ -1,3 +1,12 @@
+-- Keep Neovim's native parsers when Lazy rebuilds runtimepath. Some systems
+-- have lib64 without lib64/nvim, while Neovim correctly uses lib/nvim.
+local parser_paths = {}
+for _, path in ipairs(vim.opt.rtp:get()) do
+  if vim.fn.isdirectory(path .. "/parser") == 1 then
+    parser_paths[#parser_paths + 1] = path
+  end
+end
+
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
@@ -44,6 +53,7 @@ require("lazy").setup({
   }, -- automatically check for plugin updates
   performance = {
     rtp = {
+      paths = parser_paths,
       -- disable some rtp plugins
       disabled_plugins = {
         "gzip",

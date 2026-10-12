@@ -232,8 +232,18 @@ return {
   { "mfussenegger/nvim-dap", keys = {
     { "<leader>dr", function() require("config.terminals").show_debug_console() end, desc = "Debug console" },
   } },
-  { "mason-org/mason.nvim", opts = { ensure_installed = {
-    "lua-language-server", "stylua", "pyright", "ruff", "bash-language-server", "shfmt", "vtsls", "prettier", "debugpy", "codelldb", "js-debug-adapter",
-  } } },
+  { "mason-org/mason.nvim", opts = function(_, opts)
+    opts.ensure_installed = opts.ensure_installed or {}
+    vim.list_extend(opts.ensure_installed, {
+      "lua-language-server", "stylua", "pyright", "ruff", "bash-language-server", "shfmt", "vtsls", "prettier", "debugpy", "codelldb", "js-debug-adapter",
+    })
+    -- Language extras also request these tools. Mason rejects a second
+    -- installation while the first one is still in progress.
+    local unique, seen = {}, {}
+    for _, tool in ipairs(opts.ensure_installed or {}) do
+      if not seen[tool] then unique[#unique + 1], seen[tool] = tool, true end
+    end
+    opts.ensure_installed = unique
+  end },
   { "neovim/nvim-lspconfig", opts = { servers = { bashls = {}, clangd = { mason = false } } } },
 }

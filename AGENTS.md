@@ -23,6 +23,11 @@ or perform operations on the user's actual repositories independently.
   `lazy-lock.json`, plugins, parsers, and language tools. Copying the repository
   alone does not guarantee an identical environment. Tested on Neovim 0.12.4;
   do not infer a minimum supported version from this.
+- Preserve Neovim's initial parser runtime directories when Lazy resets runtimepath;
+  the presence of `lib64` does not mean it contains Neovim's parsers. Merge Mason
+  tool requests without duplicates: extras may request the same tool, and a second
+  install during an active installation raises an error. The startup/dependency
+  regression is `tests/startup_dependencies.py`.
 - Communicate in Polish. Our own UI labels are currently in English. Polish
   Git messages are acceptable: do not force translations or identify errors
   by matching language-dependent message text.
