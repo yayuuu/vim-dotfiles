@@ -93,8 +93,11 @@ R / F5 in the Git panel refreshes the status. Shift+click selects a range of fil
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard
 and Commit are available in the Git panel and its menu. Discard requires confirmation.
 When a file appears in both groups, opening it from Changes compares against its staged version.
-Click the branch name to select a branch; the `[↑… ↓…]` button synchronizes
-the repository through fetch, pull, and push.
+Click the branch name to select a branch. Type a new name with no matching branches
+and press Enter to create and switch to it. The `[↑… ↓…]` button synchronizes
+through fetch, pull, and push. Without an upstream, it publishes the branch and
+sets tracking, using the configured push remote, `origin`, or the only remote;
+if several remotes remain, select one. Subsequent clicks synchronize normally.
 
 The command palette (Ctrl+Shift+P / Alt+P) includes Git commands. Search for `Git`:
 `GitStatus`, `GitRefresh`, `GitSwitchBranch`, `GitMerge`, `GitMergeAbort`,

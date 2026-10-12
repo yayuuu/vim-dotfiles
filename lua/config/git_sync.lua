@@ -53,20 +53,43 @@ function M.label()
   return string.format("[↑%s ↓%s]", state.ahead or "–", state.behind or "–")
 end
 
+local function publication_remote(root, branch, callback)
+  local function git(args)
+    local command = { "git", "-C", root }; vim.list_extend(command, args)
+    return vim.system(command, { text = true }):wait()
+  end
+  local result = git({ "remote" })
+  if result.code ~= 0 then
+    vim.notify(result.stderr or "Unable to list Git remotes", vim.log.levels.ERROR)
+    return
+  end
+  local remotes = vim.split(vim.trim(result.stdout or ""), "\n", { trimempty = true })
+  if #remotes == 0 then
+    vim.notify("Add a Git remote before publishing this branch", vim.log.levels.INFO)
+    return
+  end
+  for _, key in ipairs({ "branch." .. branch .. ".pushRemote", "remote.pushDefault", "branch." .. branch .. ".remote" }) do
+    local configured = git({ "config", "--get", key })
+    local remote = vim.trim(configured.stdout or "")
+    if configured.code == 0 and vim.tbl_contains(remotes, remote) then callback(remote); return end
+  end
+  if vim.tbl_contains(remotes, "origin") then callback("origin")
+  elseif #remotes == 1 then callback(remotes[1])
+  else vim.ui.select(remotes, { prompt = "Publish branch to remote:" }, function(remote)
+    if remote then callback(remote) end
+  end) end
+end
+
 function M.sync()
   if M.busy then return end
   local root = require("config.ide").root()
   local upstream = vim.system({ "git", "-C", root, "rev-parse", "--abbrev-ref", "@{upstream}" }, { text = true }):wait()
-  if upstream.code ~= 0 then
-    vim.notify("This branch has no upstream. Configure its remote branch before synchronizing.", vim.log.levels.INFO)
-    return
-  end
-  M.busy = true; redraw()
-  local commands = { { "fetch", "--quiet" }, { "pull", "--no-edit" }, { "push" } }
+  local publish = upstream.code ~= 0
+  local commands
   local function finish(error)
     M.busy = false
     if error then vim.notify(error, vim.log.levels.ERROR)
-    else vim.notify("Repository synchronized", vim.log.levels.INFO) end
+    else vim.notify(publish and "Branch published with upstream" or "Repository synchronized", vim.log.levels.INFO) end
     vim.cmd("checktime")
     require("config.git").refresh()
   end
@@ -85,7 +108,24 @@ function M.sync()
     -- starting the explicit pull/push sequence for this captured repository.
     if M.fetching[root] then vim.defer_fn(start, 100) else run(1) end
   end
-  start()
+  local function execute(steps)
+    if M.busy then return end
+    commands = steps
+    M.busy = true; redraw()
+    start()
+  end
+  if publish then
+    local head = vim.system({ "git", "-C", root, "symbolic-ref", "--quiet", "HEAD" }, { text = true }):wait()
+    if head.code ~= 0 then
+      vim.notify("Switch to a branch before publishing (detached HEAD)", vim.log.levels.INFO)
+      return
+    end
+    local branch = vim.trim(head.stdout):gsub("^refs/heads/", "")
+    publication_remote(root, branch, function(remote)
+      local ref = "refs/heads/" .. branch
+      execute({ { "push", "--set-upstream", "--", remote, ref .. ":" .. ref } })
+    end)
+  else execute({ { "fetch", "--quiet" }, { "pull", "--no-edit" }, { "push" } }) end
 end
 
 function M.setup()

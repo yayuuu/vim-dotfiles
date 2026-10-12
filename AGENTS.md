@@ -339,8 +339,13 @@ or perform operations on the user's actual repositories independently.
   preserving staged changes. Commit includes staged changes and the message from
   the panel's input field.
 - Refresh the status, graph, branch, and upstream after operations. The ahead/behind
-  button performs fetch, pull according to Git settings, and push; errors/conflicts
-  stop subsequent steps. Do not duplicate synchronization. `vim.g.ide_git_autofetch=false`
+  button performs fetch, pull according to Git settings, and push. Without upstream,
+  publish the current branch with `push --set-upstream`, respecting configured push
+  remotes, then preferring origin or the only remote; offer a selection if ambiguous.
+  Detached HEAD and repositories without remotes must produce a helpful message.
+  In the branch picker, Enter on a new name with no matches creates and switches to
+  that branch; validate literal branch names and preserve ordinary selection/cancel.
+  Errors/conflicts stop subsequent steps. Do not duplicate synchronization. `vim.g.ide_git_autofetch=false`
   disables background fetch. Switching branches also refreshes Files and the status bar.
 - Ex commands registered by `git_commands.lua` expose Git actions in the ordinary
   Ctrl+Shift+P / Alt+P command palette. Keep actions shared with menus where applicable.
@@ -473,6 +478,7 @@ Run a single scenario:
   `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `commit_scrollbar.py`,
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`;
+  Status-bar branch creation and publication → `git_branch_publish.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
   file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and

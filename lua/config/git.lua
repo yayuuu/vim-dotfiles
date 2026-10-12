@@ -204,10 +204,24 @@ function M.branches()
   cwd = vim.trim(repo.stdout)
   Snacks.picker.git_branches({
     cwd = cwd,
+    title = "Switch branch / type a new name and press Enter",
     confirm = function(picker, item)
-      if not item or not item.branch then return end
+      local command = { "git", "switch" }
+      if item and item.branch then
+        vim.list_extend(command, { "--", item.branch })
+      elseif not item then
+        local branch = vim.trim(picker.input:get())
+        if branch == "" then return end
+        local valid = vim.system({ "git", "-C", cwd, "check-ref-format", "--branch", branch }, { text = true }):wait()
+        -- Reject shorthand such as @{-1}: the input must be a literal new name.
+        if valid.code ~= 0 or vim.trim(valid.stdout or "") ~= branch then
+          vim.notify("Invalid branch name: " .. branch, vim.log.levels.WARN)
+          return
+        end
+        vim.list_extend(command, { "--create", branch })
+      else return end
       picker:close()
-      Snacks.picker.util.cmd({ "git", "switch", "--", item.branch }, function()
+      Snacks.picker.util.cmd(command, function()
         vim.cmd("checktime")
         M.refresh()
       end, { cwd = cwd })
