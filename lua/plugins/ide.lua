@@ -59,7 +59,8 @@ return {
       return open(...)
     end
   end },
-  { "saghen/blink.cmp", opts = { keymap = {
+  -- LazyVim's completion configuration uses the v1 API; v2 changes it and adds blink.lib.
+  { "saghen/blink.cmp", version = "1.*", opts = { keymap = {
     ["<C-y>"] = false, ["<C-n>"] = false, ["<C-f>"] = false,
     ["<Tab>"] = { "select_and_accept", "snippet_forward", "fallback" },
   } } },
