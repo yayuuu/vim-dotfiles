@@ -81,7 +81,10 @@ or perform operations on the user's actual repositories independently.
   Selecting an editable document tab (including a diff) enters Insert mode;
   returning from Files or another panel to the editor does the same even when
   its buffer has not changed. Esc stays in Normal mode while that editor retains
-  focus. Read-only HEAD, help/reports, and tool panels keep their appropriate modes.
+  focus, until the next click in its text area, which enters Insert even when
+  the document and focused window have not changed. Mouse dragging and selection
+  retain their native modes. Read-only HEAD, help/reports, and tool panels keep
+  their appropriate modes.
   The mouse wheel over tabs scrolls the list horizontally without changing the active document.
 - The entire bar uses the lighter inactive tab color; the active tab uses the dark panel background.
   The separator is a one-column **▌** (`vhalf`) character in the editor background color,

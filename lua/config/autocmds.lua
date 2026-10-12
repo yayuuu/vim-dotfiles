@@ -107,6 +107,34 @@ vim.api.nvim_create_autocmd("ModeChanged", {
     editor_input_request = editor_input_request + 1
   end,
 })
+-- Clicking the focused document does not emit WinEnter or BufEnter.
+-- Wait for release so native mouse dragging and selection keep their modes.
+local editor_releases = {}
+for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
+  editor_releases[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
+end
+vim.on_key(function(key, typed)
+  if require("config.mouse_capture").blocked(key, typed) then return end
+  if not editor_releases[typed] and not editor_releases[key] then return end
+  local mouse, ide = vim.fn.getmousepos(), require("config.ide")
+  local win = mouse.winid
+  if ide.menu_mouse_pending or win == 0 or not vim.api.nvim_win_is_valid(win)
+    or vim.api.nvim_win_get_config(win).relative ~= "" or ide.is_tool_tab()
+    or mouse.line < 1 or mouse.winrow < 1 then return end
+  local buf, info = vim.api.nvim_win_get_buf(win), vim.fn.getwininfo(win)[1]
+  if vim.bo[buf].buftype ~= "" or not vim.bo[buf].modifiable or vim.bo[buf].readonly
+    or not info or mouse.winrow > info.height + info.winbar
+    or mouse.wincol <= info.textoff or mouse.wincol > info.width then return end
+  local request = editor_input_request
+  vim.defer_fn(function()
+    if request == editor_input_request and vim.api.nvim_win_is_valid(win)
+      and vim.api.nvim_get_current_win() == win and vim.api.nvim_get_current_buf() == buf
+      and not ide.menu_mouse_pending and not ide.is_tool_tab()
+      and vim.bo[buf].modifiable and not vim.bo[buf].readonly and vim.fn.mode() == "n" then
+      vim.cmd("startinsert")
+    end
+  end, 20)
+end, vim.api.nvim_create_namespace("DesktopEditorInputMouse"))
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter", "WinEnter" }, {
   group = group,
   callback = function()

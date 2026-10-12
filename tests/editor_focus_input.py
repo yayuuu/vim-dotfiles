@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-editor-focus-') as directory:
         def normal():
             editor.call('nvim_input', '<Esc>')
             editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Esc enters Normal')
-            time.sleep(.3)
+            # Keep independent clicks outside Neovim's double-click interval.
+            time.sleep(max(.3, editor.lua('return vim.o.mousetime') / 1000 + .05))
             assert editor.lua('return vim.fn.mode()') == 'n', 'Render/focus restoration must not undo Escape'
 
         def click_editor():
@@ -38,6 +39,32 @@ with tempfile.TemporaryDirectory(prefix='nvim-editor-focus-') as directory:
             editor.wait(position, 'Document tab rendered')
             editor.click(*position())
             editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Selecting document tab starts Insert')
+
+        # A click in the already focused editor has no WinEnter/BufEnter event.
+        for _ in range(2):
+            normal()
+            click_editor()
+            assert editor.lua('return vim.api.nvim_get_current_win()') == main
+        editor.call('nvim_input', 'X')
+        editor.wait(lambda: 'X' in editor.call('nvim_buf_get_lines', firstbuf, 0, 1, False)[0],
+                    'Typing after a repeated click inserts text')
+
+        normal()
+        position = editor.lua('local w=...;local p=vim.api.nvim_win_get_position(w);local i=vim.fn.getwininfo(w)[1];'
+                              'return {p[1]+i.winbar+i.height-1,p[2]+i.textoff+2}', main)
+        editor.click(*position)
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Click in last editor row starts Insert')
+
+        normal()
+        position = editor.lua('local p=vim.fn.screenpos(...,1,1);return {p.row-1,p.col-1}', main)
+        editor.call('nvim_input_mouse', 'left', 'press', '', 0, *position)
+        editor.lua('vim.cmd("redraw!")')
+        editor.call('nvim_input_mouse', 'left', 'drag', '', 0, position[0], position[1] + 5)
+        editor.lua('vim.cmd("redraw!")')
+        editor.call('nvim_input_mouse', 'left', 'release', '', 0, position[0], position[1] + 5)
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') in ('v', 's'), 'Mouse dragging keeps selection')
+        time.sleep(.1)
+        assert editor.lua('return vim.fn.mode()') in ('v', 's'), 'Input request must not cancel selection'
 
         normal()
         editor.lua('require("config.ide").explorer()')
@@ -76,6 +103,6 @@ with tempfile.TemporaryDirectory(prefix='nvim-editor-focus-') as directory:
         time.sleep(.2)
         assert editor.lua('return vim.fn.mode()') == 'n', 'Read-only HEAD stays Normal'
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
-        print('PASS: Files/terminal to same editor or tab, keyboard cycling, editable diff; Escape persists and HEAD stays Normal.')
+        print('PASS: repeated clicks in focused editor enable typing; Files/terminal to editor or tab, keyboard cycling, editable diff; Escape persists and HEAD stays Normal.')
     finally:
         editor.close()
