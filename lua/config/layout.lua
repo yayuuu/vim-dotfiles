@@ -25,6 +25,15 @@ local function windows()
   return result
 end
 
+local function history_limit(wins)
+  if not wins.tree or not wins.history then return end
+  -- Keep both sections and file entries below the pinned header, reserving
+  -- the selector and a possible horizontal bar when restoring a tall graph.
+  local info = vim.fn.getwininfo(wins.tree)[1]
+  local minimum = require("config.git_header").rows + 5 + info.winbar
+  return math.max(1, vim.api.nvim_win_get_height(wins.tree) + vim.api.nvim_win_get_height(wins.history) - minimum)
+end
+
 local function measure()
   local sizes = {}
   for role, win in pairs(windows()) do
@@ -79,7 +88,8 @@ function M.apply(role)
       if name == "tree" or name == "terminal_sessions" then
         vim.api.nvim_win_set_width(win, math.max(1, math.min(math.max(18, size), extent - 10)))
       else
-        vim.api.nvim_win_set_height(win, math.max(1, math.min(math.max(4, size), extent - 4)))
+        local maximum = name == "history" and history_limit(wins) or extent - 4
+        vim.api.nvim_win_set_height(win, math.max(1, math.min(math.max(4, size), maximum)))
       end
     end
   end
@@ -142,6 +152,12 @@ function M.setup()
       -- Record a manual drag now; debounce only the disk write, so a quick
       -- subsequent screen resize cannot lose the newly chosen proportions.
       remember()
+      local wins = windows()
+      local maximum = history_limit(wins)
+      if maximum and vim.api.nvim_win_get_height(wins.history) > maximum then
+        M.reflow()
+        return
+      end
       M.revision = M.revision + 1
       local revision = M.revision
       vim.defer_fn(function() if M.revision == revision then M.save() end end, 200)

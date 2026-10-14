@@ -1,6 +1,7 @@
 """Toolbar headings toggle/switch once, without stale callbacks reopening menus."""
 from pathlib import Path
 import tempfile
+import time
 
 from ui import Editor
 
@@ -15,7 +16,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-menu-switch-') as directory:
                    'vim.api.nvim_create_autocmd("WinClosed",{callback=function(a)local t=vim.g.menu_test;'
                    'if t.wins[a.match] then t.closed=t.closed+1;t.wins[a.match]=nil;vim.g.menu_test=t end end})')
         expected_open, expected_close, previous = 0, 0, None
-        for name in ('Edit','Edit','Edit','View','File','Edit','View','View','File','View','Edit'):
+        for name in ('Edit','Edit','Edit','View','File','Edit','View','View','File','View','Edit',
+                     'Terminal','Debug','Terminal','Debug','Help','Terminal','Debug','Debug'):
             editor.lua('vim.cmd("redraw!")')
             column = ''.join(editor.grid[0]).index(' '+name+' ')+2
             editor.click(0,column)
@@ -30,6 +32,18 @@ with tempfile.TemporaryDirectory(prefix='nvim-menu-switch-') as directory:
             state = editor.lua('return vim.g.menu_test')
             assert (state['opened'],state['closed']) == (expected_open,expected_close), 'One transition per click, without flickering reopen'
             assert editor.lua('return #require("menu.state").bufids') == (1 if previous else 0)
+        for width in (80, 100, 160, 240):
+            editor.lua('require("config.ide").close_menu()')
+            editor.call('nvim_ui_try_resize', width, 48)
+            for name in ('Terminal', 'Debug', 'Terminal', 'Debug', 'Help', 'Terminal', 'Debug'):
+                editor.lua('vim.cmd("redraw!")')
+                column = ''.join(editor.grid[0]).index(' ' + name + ' ') + 2
+                editor.click(0, column)
+                editor.wait(lambda: editor.lua('return require("config.ide").menu_name') == name,
+                            f'Switch to {name} at width {width}')
+                time.sleep(.2)
+                assert editor.lua('return require("config.ide").menu_name') == name, 'Replacement menu stays open'
+                assert editor.lua('return #require("menu.state").bufids') == 1
         # Choosing an action still closes exactly once and creates a document.
         editor.click(0,3)
         editor.wait(lambda: editor.lua('return require("config.ide").menu_name') == 'File', 'Switch to File')

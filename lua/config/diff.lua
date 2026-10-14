@@ -302,7 +302,12 @@ function M.setup()
     vim.schedule(function()
       if M.busy or not winvalid(win) or vim.api.nvim_win_get_buf(win) ~= buf
         or require("config.ide").is_tool_tab(vim.api.nvim_win_get_tabpage(win)) then return end
-      if M.entries[buf] then M.show(buf)
+      if M.entries[buf] then
+        -- Closing a popup briefly enters the comparison and queues BufEnter.
+        -- It is already displayed; selecting it again would steal focus from
+        -- a replacement menu opened before this callback runs.
+        if M.active and M.active.buf == buf and M.active.right == win and winvalid(M.active.left) then return end
+        M.show(buf)
       elseif M.active and not vim.b[buf].ide_diff_before then
         local right = M.active.right
         if win == M.active.left and winvalid(right) then

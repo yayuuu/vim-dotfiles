@@ -9,6 +9,41 @@ function M.row(mouse, win)
   if position.row == mouse.screenrow then return mouse.line end
 end
 
+function M.statusline_click()
+  return not require("config.mouse_capture").active()
+    and (vim.o.laststatus ~= 3 or vim.fn.getmousepos().screenrow == vim.o.lines - vim.o.cmdheight)
+end
+
+local function horizontal_divider(mouse)
+  local win = mouse.winid
+  if vim.o.laststatus ~= 3 or win == 0 or not api.nvim_win_is_valid(win)
+    or api.nvim_win_get_config(win).relative ~= "" then return end
+  local position = api.nvim_win_get_position(win)
+  if mouse.screenrow ~= position[1] + api.nvim_win_get_height(win) + 1
+    or mouse.screencol <= position[2] or mouse.screencol > position[2] + api.nvim_win_get_width(win) then return end
+  -- The real global status bar has no native window directly below it.
+  for _, below in ipairs(api.nvim_tabpage_list_wins(0)) do
+    if api.nvim_win_get_config(below).relative == "" then
+      local p = api.nvim_win_get_position(below)
+      if p[1] == mouse.screenrow and mouse.screencol > p[2]
+        and mouse.screencol <= p[2] + api.nvim_win_get_width(below) then return win end
+    end
+  end
+end
+
+local function resize_divider(drag, row)
+  drag.latest = row
+  if drag.pending then return end
+  drag.pending = true
+  vim.schedule(function()
+    drag.pending = false
+    if drag.cancelled or not api.nvim_win_is_valid(drag.win)
+      or api.nvim_win_get_tabpage(drag.win) ~= api.nvim_get_current_tabpage() then return end
+    local offset = drag.height + drag.latest - drag.row - api.nvim_win_get_height(drag.win)
+    if offset ~= 0 then vim.fn.win_move_statusline(drag.win, offset) end
+  end)
+end
+
 function M.setup()
   local capture = require("config.mouse_capture")
   local events = {}
@@ -19,10 +54,19 @@ function M.setup()
       end
     end
   end
-  local blank
+  local blank, resize
   vim.on_key(function(key, typed)
     local kind = events[typed] or events[key]
     if not kind then return end
+    if kind == "Mouse" and resize then
+      resize.cancelled = true
+      capture.cancel(resize)
+      resize = nil
+    elseif resize then
+      resize_divider(resize, vim.fn.getmousepos().screenrow)
+      if kind == "Release" then capture.release(resize); resize = nil end
+      return ""
+    end
     if blank and kind ~= "Mouse" then
       if kind == "Release" then capture.release(blank); blank = nil end
       return ""
@@ -48,6 +92,14 @@ function M.setup()
         vim.schedule(function() require("config.ide").close_menu() end)
         return ""
       end
+    end
+    local divider = horizontal_divider(mouse)
+    if divider then
+      -- Native global-statusline click regions also cover horizontal split
+      -- separators. Own the gesture and move the actual native boundary.
+      resize = { win = divider, row = mouse.screenrow, height = api.nvim_win_get_height(divider) }
+      capture.claim(resize)
+      return ""
     end
     local win = mouse.winid
     if win == 0 or not api.nvim_win_is_valid(win) then return end

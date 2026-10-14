@@ -218,6 +218,14 @@ function M.setup()
     local mouse = vim.fn.getmousepos()
     if wheel and valid(mouse.winid) and vim.bo[api.nvim_win_get_buf(mouse.winid)].buftype == "terminal" then
       local source = mouse.winid
+      if vim.fn.mode() == "t" then
+        local enabled = require("config.terminals").mouse_enabled(api.nvim_win_get_buf(source))
+        -- Let Neovim encode events for an application that requested the mouse.
+        -- For unmanaged terminals retain Neovim's own input routing as well.
+        if enabled ~= false then return end
+      end
+      local state = M.sources[source]
+      if not state or not state.bar or not valid(state.bar.win) then return "" end
       if vim.fn.mode() == "t" then api.nvim_feedkeys(vim.keycode("<C-\\><C-n>"), "ni", false) end
       vim.schedule(function() local offset = bounds(source); M.set(source, offset + wheel) end)
       return ""

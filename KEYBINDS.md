@@ -49,6 +49,7 @@ Formatting is available from the context menu; saving does not format automatica
 | Click the gutter before a line number | Add/remove a breakpoint |
 | Click the minimap | Jump to a position in the code |
 | Mouse wheel / drag on the minimap | Scroll the code |
+| Mouse wheel in a terminal | Scroll the running application if it handles the mouse; otherwise scroll available terminal history |
 | Click the right side of a diff | Enter Insert mode |
 | Click the terminal | Enter terminal input mode |
 

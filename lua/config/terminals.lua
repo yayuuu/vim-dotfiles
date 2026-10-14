@@ -4,6 +4,11 @@ local api = vim.api
 local namespace = api.nvim_create_namespace("DesktopTerminalList")
 local function valid(win) return win and api.nvim_win_is_valid(win) end
 local function buffer_valid(buf) return type(buf) == "number" and api.nvim_buf_is_valid(buf) end
+function M.mouse_enabled(buf)
+  for _, item in ipairs(M.items) do
+    if item.buf == buf then return item.mouse.enabled end
+  end
+end
 local function resume_input()
   local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
   if win ~= M.win or vim.bo[buf].buftype ~= "terminal" then return end
@@ -147,13 +152,14 @@ end
 function M.new(opts)
   opts = opts or {}
   M.serial = M.serial + 1
-  local item = { id = M.serial, cwd = require("config.ide").root(), buf = api.nvim_create_buf(false, true) }
+  local item = { id = M.serial, cwd = require("config.ide").root(), buf = api.nvim_create_buf(false, true), mouse = { enabled = false } }
   vim.bo[item.buf].bufhidden = "hide"
   vim.bo[item.buf].filetype = "snacks_terminal"
   M.items[#M.items + 1] = item
   M.show(item.buf, false)
   api.nvim_buf_call(item.buf, function()
     item.job = vim.fn.jobstart({ "/bin/bash" }, { term = true, cwd = item.cwd,
+      on_stdout = function(_, data) require("config.terminal_mouse").feed(item.mouse, data) end,
       on_exit = function() vim.schedule(function() M.close(item.buf) end) end })
   end)
   if item.job <= 0 then M.close(item.buf); vim.notify("Could not start terminal", vim.log.levels.ERROR); return end

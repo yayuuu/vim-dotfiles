@@ -164,6 +164,9 @@ function M.setup()
     local event = events[typed] or events[key]
     if not event then return end
     local mouse = vim.fn.getmousepos()
+    -- On the global tabline Neovim may report the diff header underneath it.
+    -- Leave these events to the menu's native tabline click handlers.
+    if mouse.screenrow == 1 then return end
     local diff = require("config.diff").active
     if diff and mouse.winid == diff.header then
       if event.button == "Left" and event.kind == "Release" and mouse.winrow > 1 and mouse.wincol >= M.previous then

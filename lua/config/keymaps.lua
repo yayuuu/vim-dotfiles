@@ -66,6 +66,11 @@ action("<S-F12>", function() vim.api.nvim_set_current_win(ide.editor_window());v
 action("<C-S-p>", function() Snacks.picker.commands() end, "Command palette")
 action("<M-p>", function() Snacks.picker.commands() end, "Command palette")
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal input" })
+-- Neovim's terminal encodes keypad navigation as keypad digits. Normalize only
+-- navigation names; <k0>...<k9> and ordinary digits retain numeric input.
+for _, key in ipairs({ "Home", "End", "Up", "Down", "Left", "Right", "PageUp", "PageDown", "Insert", "Del" }) do
+  map("t", "<k" .. key .. ">", "<" .. key .. ">", { desc = "Terminal keypad " .. key })
+end
 for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
 map({ "n", "x", "s", "i" }, "<" .. prefix .. "RightMouse>", function()
   local mouse = vim.fn.getmousepos()

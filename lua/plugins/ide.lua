@@ -185,16 +185,20 @@ return {
     opts.options.section_separators = { left = "", right = "" }
     opts.sections.lualine_a = { "mode" }
     opts.sections.lualine_b = { { "branch", icon = "git", on_click = function(_, button)
-      if button == "l" then vim.schedule(function() require("config.git").branches() end) end
+      if button == "l" and require("config.panel_mouse").statusline_click() then
+        vim.schedule(function() require("config.git").branches() end)
+      end
     end }, { function() return require("config.git_sync").label() end,
       cond = function() return require("config.git_sync").visible() end,
       color = require("config.colors").git_sync(), padding = { left = 1, right = 1 },
       on_click = function(_, button)
-        if button == "l" then vim.schedule(function() require("config.git_sync").sync() end) end
+        if button == "l" and require("config.panel_mouse").statusline_click() then
+          vim.schedule(function() require("config.git_sync").sync() end)
+        end
       end,
     } }
     opts.sections.lualine_c = { { "filename", path = 1 }, "diff", { "diagnostics", on_click = function(_, button)
-      if button == "l" then vim.schedule(function()
+      if button == "l" and require("config.panel_mouse").statusline_click() then vim.schedule(function()
         local problems = require("config.problems")
         if not problems.view then problems.open() end
       end) end

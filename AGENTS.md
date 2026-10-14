@@ -43,6 +43,11 @@ or perform operations on the user's actual repositories independently.
   Clicking the active heading closes its dropdown. Switch menus atomically and
   scope delayed close callbacks to their own popup buffer so an old callback
   cannot close or reopen the replacement menu.
+  The global menu remains clickable above both diff columns: mouse events on
+  screen row 1 belong to the tabline even when getmousepos reports the diff header.
+  Switching Terminal → Debug (and other headings) leaves only the new dropdown
+  open. A queued BufEnter for an already displayed diff must not select it again
+  and steal focus from the replacement menu.
 - The left side is a single column with **Projects, Files, Debug, Git, Tabs** tabs,
   in that order. Leave one character of padding before the first tab.
   Selecting a tab replaces the entire column's contents instead of adding a column.
@@ -61,6 +66,13 @@ or perform operations on the user's actual repositories independently.
   Window resizing scales panels proportionally while enforcing minimum dimensions;
   enlarging the window restores the chosen proportions. Account for window roles
   and the order of width changes, especially for the tree and terminal list.
+  A tall saved commit graph or a dragged Git divider must leave room for the
+  pinned Git header, both change sections, and file entries. Limit the graph
+  using the actual sidebar height while preserving the preferred proportion.
+  Horizontal dividers, including Git Status / Commits, must not activate global
+  status-bar buttons. Capture their entire left-button gesture and resize through
+  the public native window API, preserving focus and mode. Status-bar actions
+  validate the actual global status-bar row and honor mouse capture.
 - Delayed rendering of the previous tab must not replace the newly selected tab.
   Neo-tree's file-follow/reveal lookup must resolve diff document URIs to their
   actual file paths on either side. Never scan URI components as directories.
@@ -235,6 +247,8 @@ or perform operations on the user's actual repositories independently.
 - The header shows the current program and directory, e.g. `bash - ~/project`,
   instead of a fixed Terminal label. Update it after `cd` and when a program starts.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
+  Keypad navigation with NumLock off must reach terminal programs as Home/End,
+  arrows, PageUp/PageDown, Insert/Delete, preserving numeric keypad digit input.
   Esc, Esc exits input mode; clicking again resumes it. Preserve text selection.
   Dragging/clicking its vertical scrollbar enters native scrollback mode so
   history stays at the requested position. Consume the mouse gesture and use
@@ -242,6 +256,12 @@ or perform operations on the user's actual repositories independently.
   send scrolling keys to the shell. Clicking the terminal body resumes input.
   Clamp the mouse wheel over the terminal body before moving its viewport;
   it must not scroll into empty space beyond the last history row.
+  Body wheel events leave Terminal mode only for actual history with our vertical
+  scrollbar. Without history they keep Terminal mode. When the child enables
+  mouse reporting, forward body wheel events through Neovim's native terminal
+  handling, even if history exists. Observe reporting modes through the public
+  job stdout callback, including sequences split across chunks; do not infer
+  support from the process name. Clicking our scrollbar still opens scrollback.
 - **Debug console** is a permanent, nonclosable list entry using the same wide area.
   Switching preserves both the console and terminal.
 - View > Problems replaces the entire bottom area with diagnostics, a title, and
@@ -424,6 +444,7 @@ or perform operations on the user's actual repositories independently.
 | `layout.lua`, `sidebar.lua` | Proportions, column switching, graph |
 | `projects.lua`, `project_source.lua` | Project history and tab restoration |
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
+| `terminal_mouse.lua` | Child mouse-reporting requests observed from terminal output |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
@@ -431,7 +452,7 @@ or perform operations on the user's actual repositories independently.
 | `files.lua` | Files focus, file clipboard, duplicate naming, and deletion |
 | `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
 | `mouse_capture.lua` | Shared mouse gesture ownership for dragged widgets |
-| `panel_mouse.lua` | Rendered row validation and blank panel mouse gestures |
+| `panel_mouse.lua` | Rendered row validation, blank panel gestures, and horizontal divider dragging |
 | `panel_padding.lua` | Fixed Symbols and Debug margins using window options and decorations |
 | `colors.lua`, root `palette.json` and `default.json` | Active/original palette data, loader, theme/status bar options, and our highlight overrides |
 | `settings.lua`, root `settings.json` | User preferences and the icons/letters switch |
@@ -492,12 +513,17 @@ Run a single scenario:
   Symbols following cursor movement in Normal/Insert → `symbols_follow.py`.
   Automatic vertical bars and combined-axis geometry → `panel_scrollbars.py`.
   Terminal scrollback gestures, wheel boundaries, and return to input → `terminal_scrollbar.py`.
+  Terminal wheel routing to mouse-aware child applications versus history → `terminal_wheel.py`.
   Empty panel/list clicks → `panel_empty_click.py`.
   Dialog layers and pinned Git header → `scrollbar_layering.py`.
   Top menu switching and repeated-heading clicks → `menu_switch.py`.
+  Global menu clicks above diff columns across resizing → `diff_menu.py`.
+  Terminal keypad navigation and preserved numeric input → `terminal_keypad.py`.
   Command input geometry while completion is visible → `cmdline_popup.py`.
   Command-line save/close without destroying editor panels → `write_close.py`.
   Vertical sidebar dividers beside blank lists and scrollbars → `sidebar_resize.py`.
+  Git Status visibility beside an oversized saved commit graph → `git_panel_layout.py`.
+  Git divider clicks/drags versus real status-bar buttons → `git_divider.py`.
   Icon/letter preferences and invalid/missing settings fallback → `settings.py`.
   Added-file diff wheel scrolling and Select-mode panel scrolling → `diff_vertical_scroll.py`.
   Precise horizontal diff dragging in Normal/Insert → `diff_horizontal_drag.py`.
