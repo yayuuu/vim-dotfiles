@@ -31,7 +31,7 @@ action("<C-S-Down>", function() ide.move_lines(1) end, "Move line/selection down
 map("n", "<C-l>", '"_dd', { desc = "Delete line" })
 map("i", "<C-l>", '<C-o>"_dd', { desc = "Delete line" })
 action("<C-f>", ide.find, "Find in file")
-action("<C-h>", function() require("grug-far").open({ prefills = { paths = vim.fn.expand("%:p") } }) end, "Replace in file")
+action("<C-h>", ide.replace, "Replace in file")
 action("<C-S-f>", ide.search_project, "Find in project")
 action("<F3>", function() vim.cmd("normal! n") end, "Find next", { "n", "i" })
 action("<S-F3>", function() vim.cmd("normal! N") end, "Find previous", { "n", "i" })

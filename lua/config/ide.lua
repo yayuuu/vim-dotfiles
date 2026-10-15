@@ -289,18 +289,10 @@ function M.move_lines(direction)
   end
 end
 function M.find()
-  vim.api.nvim_set_current_win(M.editor_window())
-  local win = vim.api.nvim_get_current_win()
-  vim.ui.input({ prompt = "Find text: " }, function(text)
-    if text and text ~= "" and vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_set_current_win(win)
-      local pattern = "\\V" .. vim.fn.escape(text, "\\")
-      vim.fn.setreg("/", pattern)
-      vim.v.searchforward = 1
-      vim.o.hlsearch = true
-      if vim.fn.search(pattern, "c") == 0 then vim.notify("Text not found: " .. text, vim.log.levels.INFO) end
-    end
-  end)
+  require("config.search").find()
+end
+function M.replace()
+  require("config.search").replace()
 end
 function M.goto_line()
   vim.api.nvim_set_current_win(M.editor_window())
@@ -444,7 +436,7 @@ function M.popup(items)
   vim.api.nvim_win_set_config(win, config)
   -- An action closes the popup on press. Consume the matching release so
   -- it cannot open the tree row or select code underneath the vanished menu.
-  local pressed = false
+  local pressed, closed = false, false
   local position = vim.api.nvim_win_get_position(win)
   local height, width = vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win)
   local presses, releases = {}, {}
@@ -455,6 +447,14 @@ function M.popup(items)
   vim.on_key(function(key, typed)
     if require("config.mouse_capture").blocked(key, typed) then return end
     if presses[typed] or presses[key] then
+      -- A release may be lost outside the host. A fresh press starts a new
+      -- gesture, and a closed popup must never capture its old screen area.
+      pressed, M.menu_mouse_pending = false, false
+      if closed then
+        if M.popup_buffer == buf then M.popup_buffer, M.menu_name = nil, nil end
+        vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
+        return
+      end
       local mouse = vim.fn.getmousepos()
       -- Volt may have already closed the popup in its own on_key listener.
       -- Screen coordinates still identify the press after its window is gone.
@@ -473,6 +473,7 @@ function M.popup(items)
   end, vim.api.nvim_create_namespace("DesktopMenuRelease"))
   vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(win), once = true, callback = function()
     vim.schedule(function()
+      closed = true
       -- Keyboard dismissal must not leave a mouse listener over the old popup.
       -- A mouse action keeps it only until the matching release arrives.
       if not pressed and M.popup_buffer == buf then
@@ -655,7 +656,7 @@ function M.menu(name)
     },
     Search = {
       item("Find text...", M.find, "Ctrl+F"), item("Find next", cmd("normal! n"), "F3"), item("Find previous", cmd("normal! N"), "Shift+F3"),
-      item("Replace in file...", function() require("grug-far").open({ prefills = { paths = vim.fn.expand("%:p") } }) end, "Ctrl+H"),
+      item("Replace in file...", M.replace, "Ctrl+H"),
       item("Find in project...", M.search_project, "Alt+F"),
       item("Go to line...", M.goto_line, "Ctrl+G"),
     },
@@ -679,6 +680,7 @@ function M.menu(name)
       item("Refresh status", function() require("config.git").refresh() end),
       item("Switch branch...", function() require("config.git").branches() end),
       item("Merge branch...", function() require("config.git_commands").merge() end),
+      item("Rebase onto branch...", function() require("config.git_commands").rebase() end),
       item("Changed files", M.git_explorer, "Alt+R"), item("Diff view", cmd("DiffviewOpen"), "Alt+D"),
       item("File history", cmd("DiffviewFileHistory %")), item("Project history", cmd("DiffviewFileHistory")),
       item("Blame current line", function() require("gitsigns").blame_line({ full = true }) end),

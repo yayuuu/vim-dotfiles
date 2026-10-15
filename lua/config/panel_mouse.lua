@@ -118,6 +118,9 @@ function M.setup()
     -- Preserve titles, tab selectors, borders, and resize separators.
     if mouse.screenrow < top or mouse.screenrow >= top + vim.fn.getwininfo(win)[1].height then return end
     local row = M.row(mouse, win)
+    if vim.b[buf].ide_replace and require("config.search").input_at_mouse(mouse) then return end
+    local menu = vim.bo[buf].filetype == "NvMenu" and menus and menus.bufs[buf]
+    if row and menu and menu.items and menu.items[row] then return end
     local text = row and api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
     if row and text and vim.trim(text) ~= "" then return end
     blank = {}

@@ -19,7 +19,7 @@ local function run(cwd, args)
       local message = vim.trim((result.stdout or "") .. "\n" .. (result.stderr or ""))
       if message == "" then message = "Git " .. args[1] .. (result.code == 0 and " completed" or " failed") end
       vim.notify(message, result.code == 0 and vim.log.levels.INFO or vim.log.levels.ERROR)
-      -- A failed merge can still create conflicts; refresh those as well.
+      -- A failed merge/rebase can still create conflicts; refresh those as well.
       if cwd == require("config.ide").root() then
         vim.cmd("checktime")
         require("config.git").refresh()
@@ -28,18 +28,30 @@ local function run(cwd, args)
   end)
 end
 
-function M.merge(branch)
+local function integrate(branch, args, title)
   vim.cmd("stopinsert")
   local cwd = root()
   if not cwd then return end
-  if branch and branch ~= "" then run(cwd, { "merge", "--no-edit", "--", branch }); return end
-  Snacks.picker.git_branches({ cwd = cwd, all = true, title = "Merge branch",
+  local function execute(target)
+    local command = vim.list_extend(vim.deepcopy(args), { "--", target })
+    run(cwd, command)
+  end
+  if branch and branch ~= "" then execute(branch); return end
+  Snacks.picker.git_branches({ cwd = cwd, all = true, title = title,
     confirm = function(picker, item)
       if not item or not item.branch then return end
       picker:close()
-      run(cwd, { "merge", "--no-edit", "--", item.branch })
+      execute(item.branch)
     end,
   })
+end
+
+function M.merge(branch)
+  integrate(branch, { "merge", "--no-edit" }, "Merge branch")
+end
+
+function M.rebase(branch)
+  integrate(branch, { "rebase" }, "Rebase onto branch")
 end
 
 local function operation(args)
@@ -63,6 +75,9 @@ function M.setup()
     GitSwitchBranch = { "Git: switch branch", function() require("config.git").branches() end },
     GitMerge = { "Git: merge branch into the current branch", function(opts) M.merge(opts.args) end, nargs = "?" },
     GitMergeAbort = { "Git: abort the current merge", operation({ "merge", "--abort" }) },
+    GitRebase = { "Git: rebase the current branch onto another branch", function(opts) M.rebase(opts.args) end, nargs = "?" },
+    GitRebaseAbort = { "Git: abort the current rebase", operation({ "rebase", "--abort" }) },
+    GitRebaseContinue = { "Git: continue the current rebase", operation({ "rebase", "--continue" }) },
     GitFetch = { "Git: fetch remote changes", operation({ "fetch" }) },
     GitPull = { "Git: pull remote changes", operation({ "pull", "--no-edit" }) },
     GitPush = { "Git: push the current branch", operation({ "push" }) },

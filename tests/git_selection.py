@@ -145,6 +145,18 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-selection-') as directory:
         labels=context(str(repo)+'::changes')
         assert not any(label in labels for label in ['Stage Changes','Unstage Changes','Discard Changes…'])
         close_menu()
+        # Closing a diff menu on press must not block the next Git-file click
+        # when the host loses the corresponding release.
+        context(str(files['d']))
+        editor.lua('vim.cmd("redraw!")')
+        pointer = next((row, ''.join(cells).index('Open diff') + 3)
+                       for row, cells in enumerate(editor.grid) if 'Open diff' in ''.join(cells))
+        editor.call('nvim_input_mouse', 'left', 'press', '', 0, *pointer)
+        editor.wait(lambda: editor.lua('return #require("menu.state").bufids==0'), 'Open diff closes its menu on press')
+        click(str(files['e']))
+        editor.wait(lambda: editor.lua('local d=require("config.diff").active;return d and vim.b[d.buf].ide_diff_file') == str(files['e']),
+                    'Git-file click recovers after the missing menu release')
+        assert not editor.lua('return require("config.ide").menu_mouse_pending')
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
     finally:editor.close()
     print('PASS: first/cached Git entry expands groups, actual Shift-click ranges and Ctrl-click toggles in normal/insert mode including releases without modifiers, selection highlighting without changing diff, right-click preserves/resets selection, selected-only stage/unstage, unstaged/staged menu filtering including partial staging, reversed/contracted ranges and refresh pruning')

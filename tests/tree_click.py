@@ -75,8 +75,27 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-click-') as directory:
         click(first)
         assert editor.lua('return not require("config.mouse_capture").active() and require("config.vscroll").drag==nil')
         editor.lua('require("config.vscroll").detach(...);vim.api.nvim_win_close(...,true)', preview)
+
+        # A menu action closes on press. If the host loses its release, the
+        # next independent click must not inherit the old menu's click guard.
+        editor.lua('_G.tree_menu_action=false;require("config.ide").popup({'
+                   '{name="Test action",cmd=function() _G.tree_menu_action=true end}})')
+        editor.lua('vim.cmd("redraw!")')
+        pos = next((row, ''.join(cells).index('Test action') + 2)
+                   for row, cells in enumerate(editor.grid) if 'Test action' in ''.join(cells))
+        editor.call('nvim_input_mouse', 'left', 'press', '', 0, *pos)
+        editor.wait(lambda: editor.lua('return _G.tree_menu_action and #require("menu.state").bufids==0'), 'Menu action closes on press')
+        # Intentionally omit release, as with releasing outside the host window.
+        click(second)
+        assert not editor.lua('return require("config.ide").menu_mouse_pending'), 'New click clears the closed menu guard'
+        click(first)
         assert editor.call('nvim_buf_get_lines', firstbuf, 0, 1, False) == ['Unsaved document']
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
         print('PASS: tree clicks open the pointed file from Normal/Insert/Visual/Select/terminal and repeated clicks; missing horizontal/vertical releases recover without losing unsaved edits.')
+    except Exception:
+        print(editor.lua('return vim.fn.execute("messages")'))
+        print(editor.lua('return vim.inspect({mouse=vim.fn.getmousepos(),pending=require("config.ide").menu_mouse_pending,'
+                         'capture=require("config.mouse_capture").owner,menus=package.loaded["menu.state"]})'))
+        raise
     finally:
         editor.close()

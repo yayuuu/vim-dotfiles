@@ -48,6 +48,9 @@ or perform operations on the user's actual repositories independently.
   Switching Terminal → Debug (and other headings) leaves only the new dropdown
   open. A queued BufEnter for an already displayed diff must not select it again
   and steal focus from the replacement menu.
+  A closed menu's pending mouse release must not block Files or Git clicks.
+  A fresh press clears an unfinished menu gesture and detaches its old listener;
+  never keep hit-testing the screen rectangle of a menu closed earlier.
 - The left side is a single column with **Projects, Files, Debug, Git, Tabs** tabs,
   in that order. Leave one character of padding before the first tab.
   Selecting a tab replaces the entire column's contents instead of adding a column.
@@ -132,6 +135,20 @@ or perform operations on the user's actual repositories independently.
   without moving the cursor or changing its mode. The line number itself is not
   a breakpoint button. Account for scrolled code and editable diffs.
 - Saving does not format a file automatically; formatting is an explicit action.
+- Find text (Ctrl+F) has a clickable `⇄` button at its right edge. It opens the
+  same Replace action as Ctrl+H and Search > Replace, carrying over the Find text.
+  Keep its button anchored after resizing Find; relative float updates include
+  both `row` and `col`, and resizing with an open Find is covered by the UI test.
+  Replace is one named grug-far instance in a compact floating panel at the upper
+  right of the main editor, below document tabs. Keep it at most 78 columns and
+  22 rows, adapting to smaller editors without adding splits. Its `×` closes the
+  instance through the plugin's public close action; repeated opening focuses it.
+  Follow the active editable document, including the actual path of a diff, while
+  preserving search/replacement/filter inputs and editor focus. Empty input rows
+  with virtual placeholders remain clickable and enter Insert mode; result-list
+  blank space keeps the usual mouse guard. Keep Grug input metadata integration
+  local to `search.lua`. Disable completion and automatic result folding in this
+  panel so background updates do not steal input mode from a clicked field.
 - F2 renames the selected file/folder in Files or the current file in the editor,
   including an editable diff. Share the action with Rename in context menus.
   Preserve buffer IDs, unsaved contents, and diff mappings; refuse existing targets.
@@ -386,6 +403,11 @@ or perform operations on the user's actual repositories independently.
   success and failure, including conflicts, while preserving unsaved editor buffers.
   GitFetch/Pull/Push use ordinary Git settings without forcing changes; GitSync
   reuses the existing synchronization action. GitCommit focuses the message field.
+  `GitRebase` selects a local/remote upstream just like GitMerge, or accepts an
+  explicit branch argument. Rebase the current branch onto the selection without
+  switching branches or creating a merge commit; cancellation does nothing.
+  `GitRebaseAbort` and `GitRebaseContinue` expose native conflict recovery actions.
+  Refresh status after success/failure and preserve unsaved editor buffers.
 
 ## Dialogs, pickers, and minimap
 
@@ -448,6 +470,7 @@ or perform operations on the user's actual repositories independently.
 | `init.lua`, `lua/config/lazy.lua` | Startup, LazyVim, imports, Lazy window |
 | `options.lua`, `keymaps.lua`, `autocmds.lua` | Options, shortcuts, and events |
 | `ide.lua`, `documents.lua` | Actions/menus, opening/saving/closing, document routing |
+| `search.lua` | Find input, Replace button, singleton panel, active file and clickable fields |
 | `editor_tabs.lua`, `tabs.lua`, `tab_source.lua` | Tab bar, MRU, Tabs source |
 | `layout.lua`, `sidebar.lua` | Proportions, column switching, graph |
 | `projects.lua`, `project_source.lua` | Project history and tab restoration |
@@ -509,13 +532,15 @@ Run a single scenario:
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
   `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `commit_scrollbar.py`,
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
-  Git command palette and merging → `git_commands.py`;
+  Git command palette and merging → `git_commands.py`; rebase → `git_rebase.py`;
+  Find/Replace button, panel lifecycle, field clicks and active file → `search_replace.py`;
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
   file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and
-  recovery after a lost scrollbar release → `tree_click.py`.
+  recovery after a lost scrollbar/menu release → `tree_click.py`.
+  Git-file clicks after a lost menu release → `git_selection.py`.
   Empty Git Status clicks → `git_empty_click.py`.
   File clipboard/focus and deletion → `file_clipboard.py`.
   Immediate Symbols refresh → `symbols_refresh.py`; vertical boundaries → `sidebar_vertical_scroll.py`.

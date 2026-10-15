@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-commands-') as directory:
         editor.wait(lambda: editor.lua('local p=Snacks.picker.get({source="commands"})[1];return p and p.shown and #p:items()>0'),
                     'Ctrl+Shift+P opens the command palette')
         commands = editor.lua('local p=Snacks.picker.get({source="commands"})[1];local names={};for _,item in ipairs(p:items()) do names[item.cmd]=true end;return names')
-        for name in ('GitMerge', 'GitMergeAbort', 'GitStatus', 'GitRefresh', 'GitSwitchBranch', 'GitCommit',
+        for name in ('GitMerge', 'GitMergeAbort', 'GitRebase', 'GitRebaseAbort', 'GitRebaseContinue', 'GitStatus', 'GitRefresh', 'GitSwitchBranch', 'GitCommit',
                      'GitFetch', 'GitPull', 'GitPush', 'GitSync', 'GitDiff', 'GitFileHistory', 'GitProjectHistory', 'GitBlame', 'GitStageHunk'):
             assert name in commands, name
         assert editor.lua('local p=Snacks.picker.get({source="commands"})[1];for i,item in ipairs(p:items()) do '
