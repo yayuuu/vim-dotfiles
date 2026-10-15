@@ -1,6 +1,7 @@
 local M = { cache = {}, sequence = 0, fetching = {}, fetched_at = {} }
 
 local function redraw()
+  require("config.colors").set_repository(M.repository_name())
   if package.loaded.lualine then require("lualine").refresh({ force = true }) end
   vim.cmd("redrawtabline")
 end

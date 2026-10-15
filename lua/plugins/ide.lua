@@ -102,6 +102,8 @@ return {
         return result
       end,
     }, commands = {
+      add = function(state) require("config.files").create(state, false) end,
+      add_directory = function(state) require("config.files").create(state, true) end,
       rename = function(state) require("config.ide").rename_file(state) end,
       open = function(state) require("config.files").open(state) end,
       copy_to_clipboard = function(state) require("config.files").copy(state) end,

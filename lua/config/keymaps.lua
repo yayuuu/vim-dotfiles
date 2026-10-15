@@ -72,15 +72,20 @@ for _, key in ipairs({ "Home", "End", "Up", "Down", "Left", "Right", "PageUp", "
   map("t", "<k" .. key .. ">", "<" .. key .. ">", { desc = "Terminal keypad " .. key })
 end
 for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
-map({ "n", "x", "s", "i" }, "<" .. prefix .. "RightMouse>", function()
+map({ "n", "x", "s", "i", "t" }, "<" .. prefix .. "RightMouse>", function()
   local mouse = vim.fn.getmousepos()
+  local terminal = vim.fn.mode() == "t"
+  if terminal and (mouse.winid == 0 or not vim.api.nvim_win_is_valid(mouse.winid)
+    or vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].filetype ~= "neo-tree") then
+    return "<RightMouse>"
+  end
   if mouse.winid ~= 0 and vim.api.nvim_win_is_valid(mouse.winid)
     and mouse.winrow == 1 and vim.wo[mouse.winid].winbar ~= ""
     and vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].buftype == "" then
     return "<RightMouse>" -- Let the file tab handle its own context menu.
   end
   vim.schedule(ide.context_menu)
-  return "<Ignore>"
+  return terminal and "<C-\\><C-n>" or "<Ignore>"
 end, { desc = "Context menu", expr = true })
 end
 

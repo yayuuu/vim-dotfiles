@@ -14,6 +14,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-messages-') as directory:
     try:
         editor.lua('require("config.ide").open_file(...)', str(file))
         mainbuf = editor.lua('return vim.api.nvim_get_current_buf()')
+        editor.lua('local s=require("neo-tree.sources.manager").get_state("filesystem");'
+                   's.filtered_items.visible=false;s.commands.refresh(s)')
         def message():
             return editor.lua('local s=require("neo-tree.sources.manager").get_state("filesystem");'
                               'if not s.tree or not s.winid or not vim.api.nvim_win_is_valid(s.winid) then return end;'

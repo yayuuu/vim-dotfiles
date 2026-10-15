@@ -489,9 +489,26 @@ function M.popup(items)
   end })
 end
 function M.context_menu()
-  if vim.bo.filetype == "NvMenu" then return end
+  if require("config.mouse_capture").active() then return end
   local debugger = package.loaded["config.debugger_mouse"]
   local pointer = vim.fn.getmousepos()
+  if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
+    and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].filetype == "NvMenu" then return end
+  if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
+    and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].filetype == "neo-tree" then
+    local state = require("neo-tree.sources.manager").get_state_for_window(pointer.winid)
+    if state and state.name == "filesystem" then
+      local row = require("config.panel_mouse").row(pointer)
+      local node = row and state.tree and state.tree:get_node(row)
+      if node and node.type ~= "file" and node.type ~= "directory" then return end
+      vim.cmd("stopinsert")
+      vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+      vim.api.nvim_set_current_win(pointer.winid)
+      if node then require("config.files").select(state, node) end
+      M.popup(require("config.files").menu(state, node))
+      return
+    end
+  end
   if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
     and not M.is_document(vim.api.nvim_win_get_buf(pointer.winid))
     and not require("config.panel_mouse").row(pointer) then return end
@@ -532,23 +549,10 @@ function M.context_menu()
       })
       return
     end
-    local commands = require("neo-tree.sources." .. state.name .. ".commands")
-    items = {
-      { name = "Open", cmd = function() state.commands.open(state) end },
-      { name = "New file", cmd = function() commands.add(state) end },
-      { name = "New directory", cmd = function() commands.add_directory(state) end },
-      { name = "Rename", rtxt = "F2", cmd = function() M.rename_file(state) end },
-      { name = "Copy", rtxt = "Ctrl+C", cmd = function() state.commands.copy_to_clipboard(state) end },
-      { name = "Paste", rtxt = "Ctrl+V", cmd = function() state.commands.paste_from_clipboard(state) end },
-      { name = "Delete...", rtxt = "Delete", cmd = function() state.commands.delete(state) end },
-      { name = "separator" },
-      { name = "Terminal", rtxt = "Alt+T", cmd = M.terminal },
-      { name = "Repository", rtxt = "Alt+G", cmd = function() Snacks.lazygit() end },
-    }
     if state.name == "git_status" then
       local node = state.tree and state.tree:get_node()
       items = require("config.git").menu(state, node)
-    end
+    else return end
   else
     items = {
       { name = "Copy", rtxt = "Ctrl+C", cmd = edit_action(M.copy) },

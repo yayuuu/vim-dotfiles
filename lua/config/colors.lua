@@ -2,6 +2,44 @@
 local M = {}
 local api = vim.api
 M.palette = vim.json.decode(table.concat(vim.fn.readfile(vim.fn.stdpath('config') .. '/palette.json'), '\n'))
+local repository_name = ''
+
+function M.repository_color(name)
+  if name == '' then return M.palette.status_green end
+  -- Independent parts of a stable hash choose hue, saturation and lightness.
+  -- Use deeper mint/turquoise and brighter pink/blue to separate the pastels.
+  -- Warm reds stay light enough to read as pink or peach, never saturated red.
+  local hash = vim.fn.sha256(name)
+  local hue = (tonumber(hash:sub(1, 8), 16) % 36000) / 6000
+  local saturation = 0.50 + 0.22 * tonumber(hash:sub(9, 12), 16) / 65535
+  local ranges = { { 0.76, 0.80 }, { 0.64, 0.72 }, { 0.60, 0.70 },
+    { 0.57, 0.68 }, { 0.70, 0.77 }, { 0.70, 0.78 } }
+  local sector, blend = math.floor(hue) + 1, hue % 1
+  local current, following = ranges[sector], ranges[sector % 6 + 1]
+  local minimum = current[1] + (following[1] - current[1]) * blend
+  local maximum = current[2] + (following[2] - current[2]) * blend
+  local lightness = minimum + (maximum - minimum) * tonumber(hash:sub(13, 16), 16) / 65535
+  local chroma = (1 - math.abs(2 * lightness - 1)) * saturation
+  local secondary = chroma * (1 - math.abs(hue % 2 - 1))
+  local offset = lightness - chroma / 2
+  local rgb = ({ { chroma, secondary, 0 }, { secondary, chroma, 0 },
+    { 0, chroma, secondary }, { 0, secondary, chroma },
+    { secondary, 0, chroma }, { chroma, 0, secondary } })[sector]
+  return string.format('#%02x%02x%02x',
+    math.floor((rgb[1] + offset) * 255 + 0.5),
+    math.floor((rgb[2] + offset) * 255 + 0.5),
+    math.floor((rgb[3] + offset) * 255 + 0.5))
+end
+
+local function repository_highlight()
+  return { fg = M.repository_color(repository_name), bg = M.palette.ui_background, bold = true }
+end
+
+function M.set_repository(name)
+  if repository_name == name then return end
+  repository_name = name
+  api.nvim_set_hl(0, 'DesktopRepositoryName', repository_highlight())
+end
 
 function M.highlights()
   local p = M.palette
@@ -11,7 +49,7 @@ function M.highlights()
     EndOfBuffer = { fg = p.ui_background, bg = p.ui_background },
     WinBar = { fg = p.vscFront, bg = p.ui_background, bold = true },
     WinBarNC = { fg = p.vscFront, bg = p.ui_background },
-    DesktopRepositoryName = { fg = p.status_green, bg = p.ui_background, bold = true },
+    DesktopRepositoryName = repository_highlight(),
     TabLine = { fg = p.vscFront, bg = p.ui_bar_background },
     TabLineFill = { link = 'TabLine' },
     TabLineSel = { fg = p.vscFront, bg = p.ui_background, bold = true },

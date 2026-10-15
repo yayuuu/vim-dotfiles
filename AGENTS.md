@@ -38,8 +38,16 @@ or perform operations on the user's actual repositories independently.
 
 - The top contains a clickable File, Edit, Search, View, Project, Git, Debug,
   Terminal, Help menu. Menus, shortcuts, and context menus share the same actions.
-  Show the repository name in bold using the Insert badge's `status_green` color,
-  centered on the entire menu bar when it fits
+  Show the repository name in bold with a deterministic pastel color derived from
+  its full displayed name (before truncation) in `colors.lua`: hash the name and
+  map it to HSL hue, saturation 50–72%, and hue-dependent lightness: deeper
+  mint/turquoise (down to 57%), light blues/purples, and pale pink/peach reds
+  (up to 80%). Interpolate lightness bounds between hue sectors to keep shades
+  varied without introducing harsh reds. Keep the color stable
+  across restarts, resizing, project switching, and colorscheme reloads; never
+  generate dark, gray, or strongly saturated colors. Hash-derived RGB colors can
+  occasionally coincide for different names; do not promise absolute uniqueness.
+  Center the name on the entire menu bar when it fits
   beside the headings; otherwise align it right. Take only the final origin URL
   component without `.git`, falling back to the repository directory without origin.
   Truncate long names to preserve menu buttons. Clicking the title or blank bar
@@ -172,6 +180,14 @@ or perform operations on the user's actual repositories independently.
   and preserves unsaved changes; project history does not store buffer contents.
 - Files shows all files by default, including dotfiles and Git-ignored entries.
   Shift+H toggles their visibility.
+- Right-clicking blank space in Files opens its general context menu: New file,
+  New directory, Paste, Terminal, and Repository, without Open/Rename/Copy/Delete.
+  Resolve actual screen rows so EOF-clamped pointers do not target the final file.
+  Blank-space creation/paste targets the displayed tree root; a file targets its
+  parent directory and a directory targets itself, including collapsed folders.
+  Share creation with the native tree shortcuts. Keep the Neo-tree filesystem
+  action integration in `files.lua` and pass destinations explicitly rather than
+  invoking mapping commands without their per-key `state.config`.
 - Files contains the tree and Functions / Symbols (Aerial). Clicking opens a file
   or expands/collapses a directory. Opening a file from Files keeps keyboard focus
   in Files: Ctrl+C copies the selected file/folder, Ctrl+V copies it into the selected
@@ -551,6 +567,7 @@ Run a single scenario:
   Git-file clicks after a lost menu release → `git_selection.py`.
   Empty Git Status clicks → `git_empty_click.py`.
   File clipboard/focus and deletion → `file_clipboard.py`.
+  File/directory creation and blank Files context menus → `file_create_menu.py`.
   Immediate Symbols refresh → `symbols_refresh.py`; vertical boundaries → `sidebar_vertical_scroll.py`.
   Symbols following cursor movement in Normal/Insert → `symbols_follow.py`.
   Automatic vertical bars and combined-axis geometry → `panel_scrollbars.py`.
