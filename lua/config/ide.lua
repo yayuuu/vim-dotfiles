@@ -620,6 +620,11 @@ function M.outline()
   if not ok then vim.notify(err, vim.log.levels.ERROR) end
 end
 local menu_names = { "File", "Edit", "Search", "View", "Project", "Git", "Debug", "Terminal", "Help" }
+function M.menu_width()
+  local width = 0
+  for _, name in ipairs(menu_names) do width = width + vim.fn.strdisplaywidth(name) + 2 end
+  return width
+end
 function M.menu(name)
   if M.menu_name == name and M.popup_buffer and vim.api.nvim_buf_is_valid(M.popup_buffer) then
     M.close_menu()
@@ -708,11 +713,29 @@ end
 _G.DesktopIDEMenu = function(id, _, button)
   if button == "l" and menu_names[id] then M.menu(menu_names[id]) end
 end
+_G.DesktopIDERepository = function()
+  local name = require("config.git_sync").repository_name()
+  local menu_width = M.menu_width()
+  local available = vim.o.columns - menu_width - 2
+  if name == "" or available < 1 then return "" end
+  if vim.fn.strdisplaywidth(name) > available then
+    name = vim.fn.strcharpart(name, 0, available - 1)
+    while vim.fn.strdisplaywidth(name) > available - 1 do
+      name = vim.fn.strcharpart(name, 0, vim.fn.strchars(name) - 1)
+    end
+    name = name .. "…"
+  end
+  local width = vim.fn.strdisplaywidth(name)
+  local start = math.floor((vim.o.columns - width) / 2)
+  if start <= menu_width then start = vim.o.columns - width - 1 end
+  return string.rep(" ", start - menu_width) .. name
+end
 function M.menu_bar()
   local parts = { "%#WinBar#" }
   for id, name in ipairs(menu_names) do
     parts[#parts + 1] = "%" .. id .. "@v:lua.DesktopIDEMenu@ " .. name .. " %T"
   end
+  parts[#parts + 1] = "%#DesktopRepositoryName#%{v:lua.DesktopIDERepository()}%#WinBar#"
   return table.concat(parts)
 end
 _G.DesktopIDEBufferline = function()

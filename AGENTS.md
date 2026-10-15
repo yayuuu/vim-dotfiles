@@ -38,6 +38,12 @@ or perform operations on the user's actual repositories independently.
 
 - The top contains a clickable File, Edit, Search, View, Project, Git, Debug,
   Terminal, Help menu. Menus, shortcuts, and context menus share the same actions.
+  Show the repository name in bold using the Insert badge's `status_green` color,
+  centered on the entire menu bar when it fits
+  beside the headings; otherwise align it right. Take only the final origin URL
+  component without `.git`, falling back to the repository directory without origin.
+  Truncate long names to preserve menu buttons. Clicking the title or blank bar
+  space dismisses an open dropdown.
   Clicking outside an open dropdown, including empty panel space, dismisses it
   without activating a row underneath. Menu-bar buttons still switch dropdowns.
   Clicking the active heading closes its dropdown. Switch menus atomically and
@@ -164,6 +170,8 @@ or perform operations on the user's actual repositories independently.
 - Each project remembers the document list/order, active file, and cursor.
   Skip deleted files when restoring. Switching projects hides clean tabs
   and preserves unsaved changes; project history does not store buffer contents.
+- Files shows all files by default, including dotfiles and Git-ignored entries.
+  Shift+H toggles their visibility.
 - Files contains the tree and Functions / Symbols (Aerial). Clicking opens a file
   or expands/collapses a directory. Opening a file from Files keeps keyboard focus
   in Files: Ctrl+C copies the selected file/folder, Ctrl+V copies it into the selected

@@ -86,7 +86,7 @@ function M.setup()
         end
       end
       -- The menu bar's own buttons still switch between dropdowns.
-      local bar_button = mouse.screenrow == 1 and mouse.screencol <= #vim.trim(api.nvim_eval_statusline(vim.o.tabline, { use_tabline = true }).str)
+      local bar_button = mouse.screenrow == 1 and mouse.screencol <= require("config.ide").menu_width()
       if not inside and not bar_button then
         blank = {}; capture.claim(blank)
         vim.schedule(function() require("config.ide").close_menu() end)

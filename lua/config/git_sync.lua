@@ -2,6 +2,7 @@ local M = { cache = {}, sequence = 0, fetching = {}, fetched_at = {} }
 
 local function redraw()
   if package.loaded.lualine then require("lualine").refresh({ force = true }) end
+  vim.cmd("redrawtabline")
 end
 
 function M.fetch(root, force)
@@ -28,17 +29,28 @@ function M.refresh()
       vim.schedule(function() if sequence == M.sequence then M.cache[root] = { repo = false }; redraw() end end)
       return
     end
-    vim.system({ "git", "-C", root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}" },
-      { text = true }, function(result)
-        vim.schedule(function()
-          if sequence ~= M.sequence then return end
-          local ahead, behind = (result.stdout or ""):match("(%d+)%s+(%d+)")
-          M.cache[root] = { repo = true, upstream = result.code == 0, ahead = tonumber(ahead), behind = tonumber(behind) }
-          redraw()
-          if result.code == 0 then M.fetch(root) end
+    vim.system({ "git", "-C", root, "remote", "get-url", "origin" }, { text = true }, function(remote)
+      local source = remote.code == 0 and vim.trim(remote.stdout or "") or vim.trim(repo.stdout or "")
+      local name = (source:gsub("[/\\]+$", "")):match("([^/\\:]+)$") or ""
+      name = name:gsub("%.git$", ""):gsub("%c", " ")
+      vim.system({ "git", "-C", root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}" },
+        { text = true }, function(result)
+          vim.schedule(function()
+            if sequence ~= M.sequence then return end
+            local ahead, behind = (result.stdout or ""):match("(%d+)%s+(%d+)")
+            M.cache[root] = { repo = true, name = name, upstream = result.code == 0,
+              ahead = tonumber(ahead), behind = tonumber(behind) }
+            redraw()
+            if result.code == 0 then M.fetch(root) end
+          end)
         end)
-      end)
+    end)
   end)
+end
+
+function M.repository_name()
+  local state = M.cache[require("config.ide").root()]
+  return state and state.name or ""
 end
 
 function M.visible()

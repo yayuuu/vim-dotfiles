@@ -95,7 +95,7 @@ return {
       { source = "git_status", display_name = "Git" },
       { source = "buffers", display_name = "Tabs" },
     } },
-    filesystem = { components = {
+    filesystem = { filtered_items = { visible = true }, components = {
       diagnostics = function(config, node, state)
         local result = require("neo-tree.sources.common.components").diagnostics(config, node, state)
         if result.text then result.text = result.text .. " " end

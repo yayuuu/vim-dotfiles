@@ -11,6 +11,7 @@ function M.highlights()
     EndOfBuffer = { fg = p.ui_background, bg = p.ui_background },
     WinBar = { fg = p.vscFront, bg = p.ui_background, bold = true },
     WinBarNC = { fg = p.vscFront, bg = p.ui_background },
+    DesktopRepositoryName = { fg = p.status_green, bg = p.ui_background, bold = true },
     TabLine = { fg = p.vscFront, bg = p.ui_bar_background },
     TabLineFill = { link = 'TabLine' },
     TabLineSel = { fg = p.vscFront, bg = p.ui_background, bold = true },
