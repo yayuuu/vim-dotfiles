@@ -368,6 +368,14 @@ or perform operations on the user's actual repositories independently.
   Detached HEAD and repositories without remotes must produce a helpful message.
   In the branch picker, Enter on a new name with no matches creates and switches to
   that branch; validate literal branch names and preserve ordinary selection/cancel.
+  Show local and remote branches. Opening the switch picker fetches all origin
+  branches asynchronously, including those outside a single-branch clone's refspec;
+  keep cached branches usable if fetch fails. Selecting a remote branch creates
+  its local counterpart with explicit tracking, or switches to the existing local
+  branch and sets its upstream without resetting local commits. Cancellation does
+  not switch or create branches. This explicit fetch also works with autofetch off.
+  When tracking a branch outside configured fetch mappings, add that branch's
+  exact refspec so Git can resolve and fetch its upstream on subsequent syncs.
   Errors/conflicts stop subsequent steps. Do not duplicate synchronization. `vim.g.ide_git_autofetch=false`
   disables background fetch. Switching branches also refreshes Files and the status bar.
 - Ex commands registered by `git_commands.lua` expose Git actions in the ordinary
@@ -503,6 +511,7 @@ Run a single scenario:
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`;
   Status-bar branch creation and publication → `git_branch_publish.py`;
+  Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
   file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and

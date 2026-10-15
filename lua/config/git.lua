@@ -3,6 +3,7 @@ local refresh_label = "[⟳]"
 local registered = {}
 local window_sources = {}
 local selection_ns = vim.api.nvim_create_namespace("DesktopIDEGitSelection")
+local branch_fetches = {}
 
 function M.expand(state)
   if not state or not state.tree or not state.winid or not vim.api.nvim_win_is_valid(state.winid)
@@ -193,22 +194,105 @@ function M.refresh()
   if package.loaded.lualine then require("lualine").refresh({ force = true }) end
 end
 
+local function branch_git(cwd, args)
+  local command = { "git", "-C", cwd }
+  vim.list_extend(command, args)
+  return vim.system(command, { text = true }):wait()
+end
+
+local function fetch_origin_branches(cwd, picker, project)
+  if branch_git(cwd, { "remote", "get-url", "origin" }).code ~= 0 then return end
+  if branch_fetches[cwd] then branch_fetches[cwd].picker = picker; return end
+  local fetch = { picker = picker }
+  branch_fetches[cwd] = fetch
+  local sync = require("config.git_sync")
+  local function start()
+    if fetch.picker.closed then branch_fetches[cwd] = nil; return end
+    if sync.busy or sync.fetching[project] then vim.defer_fn(start, 100); return end
+    sync.fetching[project], sync.fetched_at[project] = true, vim.uv.hrtime() / 1e9
+    -- Include branches excluded by a single-branch clone's configured refspec.
+    vim.system({ "git", "-C", cwd, "fetch", "--quiet", "--no-tags", "origin",
+      "+refs/heads/*:refs/remotes/origin/*" }, {
+      text = true, timeout = 30000, env = { GIT_TERMINAL_PROMPT = "0" },
+    }, function(result)
+      vim.schedule(function()
+        branch_fetches[cwd], sync.fetching[project] = nil, nil
+        if result.code ~= 0 then
+          vim.notify("Git fetch origin failed:\n" .. (result.stderr or result.stdout or ""), vim.log.levels.WARN)
+        end
+        if not fetch.picker.closed then fetch.picker:find() end
+        if project == require("config.ide").root() then M.refresh() end
+      end)
+    end)
+  end
+  start()
+end
+
+local function switch_branch(cwd, commands, project)
+  local function run(index)
+    if not commands[index] then
+      if project == require("config.ide").root() then
+        vim.cmd("checktime")
+        require("neo-tree.sources.manager").refresh("filesystem")
+        M.refresh()
+      end
+      return
+    end
+    local command = { "git", "-C", cwd }
+    vim.list_extend(command, commands[index])
+    vim.system(command, { text = true }, function(result)
+      vim.schedule(function()
+        if result.code ~= 0 then
+          vim.notify("Git " .. commands[index][1] .. " failed:\n" .. (result.stderr or result.stdout or ""), vim.log.levels.ERROR)
+          if project == require("config.ide").root() then M.refresh() end
+          return
+        end
+        run(index + 1)
+      end)
+    end)
+  end
+  run(1)
+end
+
 function M.branches()
   vim.cmd("stopinsert")
-  local cwd = require("config.ide").root()
+  local project = require("config.ide").root()
+  local cwd = project
   local repo = vim.system({ "git", "-C", cwd, "rev-parse", "--show-toplevel" }, { text = true }):wait()
   if repo.code ~= 0 then
     vim.notify("This project is not a Git repository", vim.log.levels.INFO)
     return
   end
   cwd = vim.trim(repo.stdout)
-  Snacks.picker.git_branches({
+  local picker = Snacks.picker.git_branches({
     cwd = cwd,
+    all = true,
     title = "Switch branch / type a new name and press Enter",
     confirm = function(picker, item)
-      local command = { "git", "switch" }
+      local commands = {}
       if item and item.branch then
-        vim.list_extend(command, { "--", item.branch })
+        local remote, branch = item.branch:match("^remotes/([^/]+)/(.+)$")
+        local local_ref = branch_git(cwd, { "show-ref", "--verify", "--quiet", "refs/heads/" .. item.branch })
+        if remote and local_ref.code ~= 0 then
+          local upstream = "refs/remotes/" .. remote .. "/" .. branch
+          local refspec = "refs/heads/" .. branch .. ":" .. upstream
+          local wildcard = "refs/heads/*:refs/remotes/" .. remote .. "/*"
+          local configured = branch_git(cwd, { "config", "--get-all", "remote." .. remote .. ".fetch" })
+          local mapped = false
+          for _, spec in ipairs(vim.split(vim.trim(configured.stdout or ""), "\n", { trimempty = true })) do
+            spec = spec:gsub("^%+", "")
+            if spec == refspec or spec == wildcard then mapped = true; break end
+          end
+          -- Git needs a configured fetch mapping to resolve tracking, even
+          -- though the picker has already fetched this remote ref explicitly.
+          if not mapped then commands[#commands + 1] = { "config", "--add", "remote." .. remote .. ".fetch", "+" .. refspec } end
+          if branch_git(cwd, { "show-ref", "--verify", "--quiet", "refs/heads/" .. branch }).code == 0 then
+            commands[#commands + 1] = { "switch", "--", branch }
+            commands[#commands + 1] = { "branch", "--set-upstream-to=" .. upstream, "--", branch }
+          else
+            commands[#commands + 1] = { "switch", "--track=direct", "--create", branch, "--", upstream }
+          end
+        else commands = { { "switch", "--", item.branch } } end
       elseif not item then
         local branch = vim.trim(picker.input:get())
         if branch == "" then return end
@@ -218,15 +302,13 @@ function M.branches()
           vim.notify("Invalid branch name: " .. branch, vim.log.levels.WARN)
           return
         end
-        vim.list_extend(command, { "--create", branch })
+        commands = { { "switch", "--create", branch } }
       else return end
       picker:close()
-      Snacks.picker.util.cmd(command, function()
-        vim.cmd("checktime")
-        M.refresh()
-      end, { cwd = cwd })
+      switch_branch(cwd, commands, project)
     end,
   })
+  if picker then fetch_origin_branches(cwd, picker, project) end
 end
 
 function M.name(config, node, state, width)
