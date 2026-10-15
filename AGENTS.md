@@ -141,6 +141,14 @@ or perform operations on the user's actual repositories independently.
   `i` returns to Insert mode. Clicking code on the right side of a diff enters Insert mode.
 - Preserve mouse and Shift selection, copy/cut/paste,
   duplication, and movement of entire selected blocks.
+- Copy/Cut in the editor, including Ctrl+C/Ctrl+X and menu actions, publish to
+  the system clipboard so other applications can paste the text. Use Neovim's
+  native clipboard-provider detection, preferring Wayland tools in a Wayland
+  session and falling back appropriately on other platforms. Do not force an
+  X11 provider or replace an explicitly supplied `vim.g.clipboard` provider.
+  Verify copying through an external clipboard reader, not only `getreg('+')`,
+  since Neovim's provider cache can hide a failed system transfer. Preserve
+  existing clipboard contents when running tests against a real desktop.
 - Ctrl+Q toggles comments on the current line or all selected lines.
   Support Normal, Insert, Visual, and **Select**, which is used by the mouse and Shift.
   Native mode-switching sequences must not remap Ctrl+G/Ctrl+O
@@ -522,8 +530,8 @@ backups in `git-discard/`. Python caches do not belong in Git.
 `KEYBINDS.md` is a brief user guide: shortcuts and basic gestures.
 Layout details, the module map, and development requirements belong here. Preserve
 opening the guide through F1 / Help. Do not present local clipboard bridges or
-terminal workarounds as configuration requirements; the existing `xclip` provider
-is an environment detail to account for when moving the configuration.
+terminal workarounds as configuration requirements. Available clipboard tools and
+the display environment are environment details to account for when moving the configuration.
 
 ## Verification and logging
 
@@ -561,6 +569,7 @@ Run a single scenario:
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
+  system clipboard provider selection and cross-process Copy/Cut/Paste → `clipboard.py`;
   file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and
   recovery after a lost scrollbar/menu release → `tree_click.py`.

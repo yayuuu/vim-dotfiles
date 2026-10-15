@@ -1,4 +1,4 @@
--- Conventional editing and mouse support in VTM/kmscon.
+-- Conventional editing and mouse support.
 vim.opt.mouse = "a"
 vim.opt.mousemodel = "popup_setpos"
 vim.opt.selectmode = "mouse,key"
@@ -15,20 +15,11 @@ vim.opt.signcolumn = "yes"
 vim.opt.title = true
 vim.opt.titlestring = "%t — Neovim"
 vim.opt.confirm = true
+-- Use the system clipboard and Neovim's native provider detection (Wayland/X11/etc.).
 vim.opt.clipboard = "unnamedplus"
 vim.opt.undofile = true
 vim.opt.swapfile = false
 vim.opt.winborder = "single"
 vim.g.autoformat = false -- Formatting is explicit, so saving does not rewrite files.
 vim.g.lazyvim_python_lsp = "pyright"
--- Use the existing VTM clipboard bridge; xclip's wrapper supplies DISPLAY/XAUTHORITY.
-vim.g.clipboard = {
-  name = "VTM clipboard",
-  copy = { ["+"] = { "xclip", "-quiet", "-i", "-selection", "clipboard" },
-           ["*"] = { "xclip", "-quiet", "-i", "-selection", "primary" } },
-  paste = { ["+"] = { "xclip", "-o", "-selection", "clipboard" },
-            ["*"] = { "xclip", "-o", "-selection", "primary" } },
-  cache_enabled = 1,
-}
-
 vim.opt.tabline = require("config.ide").menu_bar()

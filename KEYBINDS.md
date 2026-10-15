@@ -35,6 +35,7 @@ Files open in Insert mode. Esc switches to Normal mode;
 Ctrl+H opens the Grug Far panel restricted to the current file.
 In the replace panel, press Esc and then \r to apply the replacement; regular expressions are supported by default.
 Formatting is available from the context menu; saving does not format automatically.
+Copy and cut in the editor use the system clipboard, shared with other applications.
 
 ## Mouse
 
