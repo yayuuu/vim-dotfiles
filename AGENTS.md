@@ -119,6 +119,15 @@ or perform operations on the user's actual repositories independently.
   The separator is a one-column **▌** (`vhalf`) character in the editor background color,
   placed between tabs and after the last tab when it fits in the viewport. Do not add it
   before × or after W 1, W 2, etc. Spaces inside a tab use that tab's background.
+  For a transparent editor background, use a one-column space instead of ▌:
+  terminal transparency cannot be painted as a half-block's foreground color.
+  The entire separator cell, including its background, matches the editor's
+  background. Gaps between cards and after the last card are transparent for NONE
+  and use the editor's opaque color otherwise; unused strip fill stays inactive.
+  The selected card must inherit the terminal background in the rendered UI,
+  including icons, diagnostics, modified markers and padding. Give the strip a
+  transparent base and explicitly paint inactive cards and unused fill; setting
+  only the selected highlight's background to NONE still inherits an opaque strip.
 - Resolve separator colors in the editor window's highlight context. Focusing
   Commit message or another tool must not make separators inherit that tool's background.
 - After a successful save, immediately remove the unsaved-change marker, including
@@ -141,6 +150,15 @@ or perform operations on the user's actual repositories independently.
   `i` returns to Insert mode. Clicking code on the right side of a diff enters Insert mode.
 - Preserve mouse and Shift selection, copy/cut/paste,
   duplication, and movement of entire selected blocks.
+- Scrolling the editor with the mouse wheel must preserve both endpoints of
+  character, line and rectangular selections, including reversed Select/Visual
+  ranges. Selected text may leave the viewport without extending the range.
+  `selection_scroll.lua` parks the logical range, paints its original bounds and
+  hides the clamped native selection/caret. Restore the range before keyboard
+  actions, context-menu editing and terminal paste. A new left click starts a
+  fresh gesture at the scrolled position. Clean up highlights, scrolloff and
+  cursor styling when the selection ends or its window/buffer changes; do not
+  alter sidebar/terminal scrolling or another widget's mouse capture.
 - Copy/Cut in the editor, including Ctrl+C/Ctrl+X and menu actions, publish to
   the system clipboard so other applications can paste the text. Use Neovim's
   native clipboard-provider detection, preferring Wayland tools in a Wayland
@@ -524,9 +542,13 @@ or perform operations on the user's actual repositories independently.
   selects glyph icons (true) or standard letters/symbols (false) for file types,
   folders, tree expanders, Git status markers, and diagnostics in Files/tabs. Load it once
   through `config.settings`; restart Neovim after editing. Default to icons when
-  missing; warn and fall back safely if malformed. Keep palette colors separate.
+  missing; warn and fall back safely if malformed. The string `color-palette`
+  selects any JSON palette filename relative to `stdpath("config")`, or an absolute
+  path. Default to `palette.json`; the current selection is `matugen.json`.
+  Validate settings independently, so a bad palette setting preserves a valid
+  icons setting and vice versa. Keep palette colors separate.
 - Keep the complete editable palette in
-  `palette.json` as a plain list of color names and values, with no code:
+  the selected JSON file as a plain list of color names and values, with no code:
   theme tokens for backgrounds/syntax/diagnostics/Git,
   status bar colors, and our highlight overrides for diffs, minimap, sidebar
   selectors, and tab separators. Keep loading, highlight definitions, and plugin
@@ -534,13 +556,32 @@ or perform operations on the user's actual repositories independently.
   of defining RGB values or writing their own color overrides. Feed the theme through
   its public `color_overrides` / `group_overrides` options and reapply our highlights
   after a colorscheme reload. Do not edit downloaded theme/plugin files.
-- Structural UI colors have exactly three editable entries in `palette.json`:
+  Keep `palette.json` as the base palette and fallback if the selected file is
+  missing or invalid. Matugen generates `matugen.json` using a template based on
+  `palette.json`, changing interface surfaces, selections, accents and terminal
+  ANSI colors. Syntax, diagnostics and Git/diff colors may also use close Matugen
+  replacements. Leave colors without a close match unchanged. The refinement
+  hook compares against `palette.json` after each generation: maximum Oklab
+  distance 0.070, and for chromatic colors (chroma >= 0.015) maximum hue shift
+  35 degrees with at least 60% of the original chroma. Neutral source colors
+  keep chroma <= 0.030 so gray text does not acquire a strong tint. Reject gray/green/red
+  substitutions that would erase semantic distinctions, even in dark diff fills.
+  The currently approved semantic substitutions are listed in `tests/color_palette.py`.
+  Generate all 16 `terminal_0` through `terminal_15` colors from Dank16's matching
+  `dank16.colorN.default.hex` entries, independently of syntax tokens.
+- Structural UI colors have exactly three editable entries in each palette:
   `ui_background` for every editor/tool/dialog panel, panel headers, menus, and the active tab,
   `ui_bar_background` for inactive tabs, tab strip fill,
   and the status bar, and `ui_separator` for panel dividers and popup borders.
   Derive the theme's background tokens from these entries in `colors.lua`;
   do not add per-panel background RGB duplicates to JSON. Separator backgrounds
   match the adjacent dark panels, including border/close-button helper windows.
+  `ui_background` may be `NONE` to inherit the terminal background; Matugen uses
+  its opaque `colors.background.default.hex` value. Keep mode-badge foregrounds readable in the transparent
+  case. Optional `status_accent_fg` gives the foreground for the normal-mode accent
+  badge; other palettes fall back to `status_fg`.
+  Matugen preserves the original background as `git_line_fg` for the inverted
+  GitSigns line highlights, so transparency does not change diff text colors.
   Keep distinct colors for selections, mode badges, diff highlights, and scrollbars.
   `default.json` stores the original pre-DankShell colors in the same schema,
   with the original editor/bar/separator colors used as its three UI entries.
@@ -573,7 +614,7 @@ or perform operations on the user's actual repositories independently.
   separately from the debounce for regenerating minimap text. Coalesce queued
   movements to the latest pointer position and respect the source's scrolloff
   margin so redraw does not shift the viewport again after moving the cursor.
-  Use a clearly visible blue viewport background (`minimap_viewport_bg`),
+  Use a clearly visible accent viewport background (`minimap_viewport_bg`),
   independently of the theme's current-line highlight.
 
 ## Module map and state
@@ -599,10 +640,11 @@ or perform operations on the user's actual repositories independently.
 | `files.lua` | Files focus, file clipboard, duplicate naming, and deletion |
 | `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
 | `mouse_capture.lua` | Shared mouse gesture ownership for dragged widgets |
+| `selection_scroll.lua` | Stable offscreen selections during wheel scrolling and restoration before editing |
 | `panel_mouse.lua` | Rendered row validation, blank panel gestures, and horizontal divider dragging |
 | `panel_padding.lua` | Fixed Symbols and Debug margins using window options and decorations |
-| `colors.lua`, root `palette.json` and `default.json` | Active/original palette data, loader, theme/status bar options, and our highlight overrides |
-| `settings.lua`, root `settings.json` | User preferences and the icons/letters switch |
+| `colors.lua`, root `palette.json`, `matugen.json` and `default.json` | Selected/base/original palette data, loader, theme/status bar options, and our highlight overrides |
+| `settings.lua`, root `settings.json` | User preferences, palette filename and the icons/letters switch |
 | `lua/plugins/ide.lua`, `lua/plugins/minimap.lua` | Plugin options and integrations |
 | `lazy-lock.json` | Pinned plugin versions |
 | `tests/ui.py`, `tests/*.py`, `tests.sh` | UI/RPC client and regression scenarios |
@@ -657,6 +699,7 @@ Run a single scenario:
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
+  Offscreen mouse/keyboard selections, copy, typing and terminal paste → `selection_scroll.py`.
   system clipboard provider selection and cross-process Copy/Cut/Paste → `clipboard.py`;
   file/folder renaming → `file_rename.py`;
   informational tree rows → `tree_messages.py`; file clicks across modes and
@@ -681,6 +724,8 @@ Run a single scenario:
   Git Status visibility beside an oversized saved commit graph → `git_panel_layout.py`.
   Git divider clicks/drags versus real status-bar buttons → `git_divider.py`.
   Icon/letter preferences and invalid/missing settings fallback → `settings.py`.
+  Palette filenames, transparency, syntax/Git preservation and fallbacks → `color_palette.py`.
+  Rendered active-tab transparency, inactive fill and tab switching → `transparent_tabs.py`.
   Added-file diff wheel scrolling and Select-mode panel scrolling → `diff_vertical_scroll.py`.
   Precise horizontal diff dragging in Normal/Insert → `diff_horizontal_drag.py`.
   Files following/revealing diff documents → `diff_files_tree.py`.

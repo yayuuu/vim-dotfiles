@@ -1,7 +1,37 @@
--- Apply the colors listed in palette.json through theme and plugin APIs.
+-- Apply the palette selected in settings.json through theme and plugin APIs.
 local M = {}
 local api = vim.api
-M.palette = vim.json.decode(table.concat(vim.fn.readfile(vim.fn.stdpath('config') .. '/palette.json'), '\n'))
+local config = vim.fn.stdpath('config')
+local default_path = vim.fs.joinpath(config, 'palette.json')
+
+local function read_palette(path)
+  local palette = vim.json.decode(table.concat(vim.fn.readfile(path), '\n'))
+  assert(type(palette) == 'table' and type(palette.ui_background) == 'string', 'expected a complete color palette')
+  for _, value in pairs(palette) do
+    assert(type(value) == 'string' and (value == 'NONE' or value:match('^#%x%x%x%x%x%x$')), 'invalid palette color')
+  end
+  return palette
+end
+
+local filename = vim.fs.normalize(require('config.settings').color_palette)
+local absolute = filename:sub(1, 1) == '/' or filename:match('^%a:[/\\]')
+M.palette_path = absolute and filename or vim.fs.joinpath(config, filename)
+local ok, palette = pcall(function()
+  local selected = read_palette(M.palette_path)
+  if M.palette_path ~= default_path then
+    local baseline_ok, baseline = pcall(read_palette, default_path)
+    if baseline_ok then
+      for key in pairs(baseline) do assert(selected[key] ~= nil, 'missing palette color: ' .. key) end
+    end
+  end
+  return selected
+end)
+if not ok then
+  local message = 'Cannot load color palette ' .. filename .. ': ' .. tostring(palette) .. '. Using palette.json.'
+  vim.schedule(function() vim.notify(message, vim.log.levels.WARN) end)
+  M.palette_path, palette = default_path, read_palette(default_path)
+end
+M.palette = palette
 local repository_name = ''
 
 function M.repository_color(name)
@@ -43,6 +73,7 @@ end
 
 function M.highlights()
   local p = M.palette
+  local git_line_fg = p.git_line_fg or (p.ui_background == 'NONE' and p.terminal_0 or p.ui_background)
   local groups = {
     Normal = { fg = p.vscFront, bg = p.ui_background },
     NormalNC = { link = 'Normal' },
@@ -53,6 +84,7 @@ function M.highlights()
     TabLine = { fg = p.vscFront, bg = p.ui_bar_background },
     TabLineFill = { link = 'TabLine' },
     TabLineSel = { fg = p.vscFront, bg = p.ui_background, bold = true },
+    DesktopTabStrip = { fg = p.sidebar_inactive_fg, bg = p.ui_background },
     StatusLine = { fg = p.status_fg, bg = p.ui_bar_background },
     StatusLineNC = { fg = p.status_inactive, bg = p.ui_bar_background },
     WinSeparator = { fg = p.ui_separator, bg = p.ui_background },
@@ -73,6 +105,10 @@ function M.highlights()
     DiffDelete = { bg = p.diff_deleted_bg, fg = p.diff_deleted_fg },
     DiffChange = { bg = p.diff_changed_bg },
     DiffText = { bg = p.diff_text_bg, bold = true },
+    -- The theme otherwise borrows the transparent editor background as text.
+    GitSignsAddLn = { fg = git_line_fg, bg = p.vscGreen },
+    GitSignsChangeLn = { fg = git_line_fg, bg = p.vscYellow },
+    GitSignsDeleteLn = { fg = git_line_fg, bg = p.vscRed },
     DesktopDiffRemoved = { bg = p.diff_deleted_bg },
     DesktopDiffAddedGap = { bg = p.diff_added_bg, fg = p.diff_added_fg },
     DesktopMapAdd = { bg = p.diff_added_bg, fg = p.diff_added_fg },
@@ -157,26 +193,28 @@ function M.theme_options()
   overrides.vscSplitThumb = p.scrollbar_thumb
   overrides.vscPopupHighlightBlue = p.vscSelection
   overrides.vscPopupHighlightGray = p.ui_bar_background
-  return { style = 'dark', transparent = false,
+  return { style = 'dark', transparent = p.ui_background == 'NONE',
     color_overrides = overrides, group_overrides = M.highlights() }
 end
 
 function M.statusline()
   local p = M.palette
+  -- A transparent panel background cannot also serve as a badge's text color.
+  local badge_fg = p.ui_background == 'NONE' and p.terminal_0 or p.ui_background
   return {
-    normal = { a = { fg = p.status_fg, bg = p.status_blue, gui = 'bold' },
+    normal = { a = { fg = p.status_accent_fg or p.status_fg, bg = p.status_blue, gui = 'bold' },
       b = { fg = p.status_blue, bg = p.ui_bar_background }, c = { fg = p.status_fg, bg = p.ui_bar_background } },
-    visual = { a = { fg = p.ui_background, bg = p.status_yellow },
+    visual = { a = { fg = badge_fg, bg = p.status_yellow },
       b = { fg = p.status_yellow, bg = p.ui_bar_background } },
     inactive = { a = { fg = p.status_fg, bg = p.ui_bar_background },
       b = { fg = p.status_inactive, bg = p.ui_bar_background }, c = { fg = p.status_inactive, bg = p.ui_bar_background } },
-    replace = { a = { fg = p.ui_background, bg = p.status_red },
+    replace = { a = { fg = badge_fg, bg = p.status_red },
       b = { fg = p.status_red, bg = p.ui_bar_background }, c = { fg = p.status_fg, bg = p.ui_bar_background } },
-    insert = { a = { fg = p.ui_background, bg = p.status_green },
+    insert = { a = { fg = badge_fg, bg = p.status_green },
       b = { fg = p.status_green, bg = p.ui_bar_background }, c = { fg = p.status_fg, bg = p.ui_bar_background } },
-    terminal = { a = { fg = p.ui_background, bg = p.status_green },
+    terminal = { a = { fg = badge_fg, bg = p.status_green },
       b = { fg = p.status_fg, bg = p.ui_bar_background }, c = { fg = p.status_fg, bg = p.ui_bar_background } },
-    command = { a = { fg = p.ui_background, bg = p.status_pink },
+    command = { a = { fg = badge_fg, bg = p.status_pink },
       b = { fg = p.status_pink, bg = p.ui_bar_background }, c = { fg = p.status_fg, bg = p.ui_bar_background } },
   }
 end
@@ -186,12 +224,13 @@ function M.git_sync()
 end
 
 function M.tab_separator(win)
-  local background = api.nvim_get_hl(0, { name = 'BufferLineBackground', link = false }).bg
   -- Resolve Normal in the editor even when a tool has focus.
   local editor_background = api.nvim_win_call(win, function()
     return api.nvim_get_hl(0, { name = 'Normal', link = false }).bg or M.palette.ui_background
   end)
-  api.nvim_set_hl(0, 'DesktopTabSeparator', { fg = editor_background, bg = background })
+  api.nvim_set_hl(0, 'DesktopTabSeparator', { fg = editor_background, bg = editor_background })
+  -- A half-block cannot paint a transparent foreground; keep the one-cell gap.
+  return editor_background == 'NONE' and ' ' or '▌'
 end
 
 function M.apply()

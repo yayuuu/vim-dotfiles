@@ -74,7 +74,9 @@ function M.draw()
     end
   end
   M.count = #groups
-  require("config.colors").tab_separator(target)
+  local colors = require("config.colors")
+  local separator = colors.tab_separator(target)
+  local transparent = colors.palette.ui_background == "NONE"
   local first = math.min(math.max(1, M.first), math.max(1, #groups))
   M.first = first
   local text, spans, hits, column, byte = "", {}, {}, 0, 0
@@ -83,7 +85,6 @@ function M.draw()
     if column >= width then break end
     if i > first then
       if column + 1 >= width then break end
-      local separator = "▌"
       spans[#spans + 1] = { first = byte, last = byte + #separator, hl = "DesktopTabSeparator" }
       text, column, byte = text .. separator, column + 1, byte + #separator
     end
@@ -101,9 +102,16 @@ function M.draw()
     end
   end
   if text ~= "" and column < width then
-    local separator = "▌"
     spans[#spans + 1] = { first = byte, last = byte + #separator, hl = "DesktopTabSeparator" }
     text = text .. separator
+    column, byte = column + 1, byte + #separator
+  end
+  if transparent and column < width then
+    -- Paint unused cells explicitly: the underlying strip must stay transparent
+    -- so a selected card with bg=NONE can inherit the terminal background.
+    local padding = string.rep(" ", width - column)
+    spans[#spans + 1] = { first = byte, last = byte + #padding, hl = "BufferLineFill" }
+    text = text .. padding
   end
   M.hits = hits
   if not M.buf or not api.nvim_buf_is_valid(M.buf) then
@@ -124,7 +132,9 @@ function M.draw()
   if valid(M.win) then api.nvim_win_set_config(M.win, config)
   else M.win = api.nvim_open_win(M.buf, false, config) end
   vim.wo[M.win].winbar = ""
-  vim.wo[M.win].winhighlight = "Normal:BufferLineBackground,EndOfBuffer:BufferLineBackground"
+  vim.wo[M.win].winhighlight = transparent
+    and "Normal:DesktopTabStrip,NormalNC:DesktopTabStrip,EndOfBuffer:DesktopTabStrip"
+    or "Normal:BufferLineBackground,EndOfBuffer:BufferLineBackground"
 end
 
 function M.refresh()

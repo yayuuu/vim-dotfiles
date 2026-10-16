@@ -1,12 +1,18 @@
 """Diagnostic counters and mouse scrolling keep separators at card boundaries."""
 from pathlib import Path
+import json
 import tempfile
 
 from ui import Editor
 
+# Keep the opaque half-block regression independent of the user's active palette.
+module = Path(__file__).resolve().parents[1] / 'lua/config/settings.lua'
+bootstrap = ('lua package.preload["config.settings"]=function() '
+             f'local m=dofile({json.dumps(str(module))});m.color_palette="palette.json";return m end')
+
 with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
     root = Path(directory)
-    editor = Editor(root, root / 'state')
+    editor = Editor(root, root / 'state', args=('--cmd', bootstrap))
     try:
         for index in range(12):
             file = root / f'document-{index:02}-long-name.txt'
@@ -60,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-tab-separators-') as directory:
             assert 'W 2' not in line and 'E 1' not in line, line
             assert editor.lua('local t=require("config.editor_tabs");local sep=vim.api.nvim_get_hl(0,{name="DesktopTabSeparator",link=false});'
                               'return sep.fg==vim.api.nvim_get_hl(0,{name="Normal",link=false}).bg and '
-                              'sep.bg==vim.api.nvim_get_hl(0,{name="BufferLineBackground",link=false}).bg and '
+                              'sep.bg==vim.api.nvim_get_hl(0,{name="Normal",link=false}).bg and '
                               'vim.wo[t.win].winhighlight=="Normal:BufferLineBackground,EndOfBuffer:BufferLineBackground"')
 
         check_strip()

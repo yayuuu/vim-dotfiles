@@ -6,4 +6,6 @@ debug
 foo.*
 *.log
 data
+settings.json
+matugen.json
 __pycache__/

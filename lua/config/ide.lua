@@ -113,6 +113,7 @@ function M.open_project(path)
   return true
 end
 local function selected()
+  require("config.selection_scroll").restore()
   local mode = vim.fn.mode()
   return mode == "v" or mode == "V" or mode == "\22" or mode == "s" or mode == "S" or mode == "\19"
 end

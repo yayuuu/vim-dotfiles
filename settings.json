@@ -1,3 +1,4 @@
 {
-  "icons": true
+  "icons": true,
+  "color-palette": "palette.json"
 }

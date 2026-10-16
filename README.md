@@ -34,6 +34,22 @@ Set `"icons": true` in [settings.json](settings.json) for file/folder icons,
 tree expanders, Git status markers, and diagnostic icons in Files and document tabs.
 Set it to `false` for standard letters and symbols. Restart Neovim after changing it.
 
+The `"color-palette"` setting selects a JSON palette, for example
+`"color-palette": "matugen.json"`. Filenames are relative to the Neovim configuration
+directory; absolute paths also work. The default is `palette.json`, which is also
+used if the selected file is missing or invalid. Restart Neovim after changing
+the setting or regenerating a palette.
+
+`matugen.json` uses opaque interface backgrounds, borders, selection and accent
+colors from Matugen. Its 16 terminal ANSI colors come from the generated Dank16
+palette. Some other colors, including syntax and Git/diffs, use nearby Matugen
+shades. Distant replacements fall back to the original `palette.json` color;
+the background Matugen hook checks perceptual distance and hue after generation.
+The main background uses Matugen's `background` color; setting `ui_background`
+to `NONE` in a custom palette still enables transparency.
+The local Matugen configuration generates this file when the palette changes.
+Use `palette.json` to return to the original interface and terminal colors.
+
 Requirements for the layout, behavior, and further development of the configuration:
 [AGENTS.md](AGENTS.md).
 

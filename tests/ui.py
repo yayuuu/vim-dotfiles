@@ -22,6 +22,8 @@ class Editor:
         self.unpacker = msgpack.Unpacker(raw=False)
         self.serial = 0
         self.grid = [[' '] * 160 for _ in range(48)]
+        self.attributes = [[0] * 160 for _ in range(48)]
+        self.highlights = {0: {}}
         self.call('nvim_ui_attach', 160, 48, {'rgb': True, 'ext_linegrid': True})
         self.wait(lambda: self.lua('return require("config.layout").ready'), 'startup')
 
@@ -29,15 +31,22 @@ class Editor:
         if message[0] != 2 or message[1] != 'redraw':
             return
         for event in message[2]:
+            if event[0] == 'hl_attr_define':
+                for identifier, rgb, *rest in event[1:]:
+                    self.highlights[identifier] = rgb
             if event[0] == 'grid_line':
                 for grid, row, column, cells, *rest in event[1:]:
                     if grid != 1 or row >= len(self.grid):
                         continue
+                    attribute = 0
                     for cell in cells:
+                        if len(cell) > 1:
+                            attribute = cell[1]
                         text, repeat = cell[0], cell[2] if len(cell) > 2 else 1
                         for _ in range(repeat):
                             if column < len(self.grid[row]):
                                 self.grid[row][column] = text
+                                self.attributes[row][column] = attribute
                             column += 1
 
     def call(self, method, *arguments):

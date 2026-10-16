@@ -44,6 +44,7 @@ Copy and cut in the editor use the system clipboard, shared with other applicati
 | Gesture | Action |
 | --- | --- |
 | Click and drag in code | Place the cursor and select text |
+| Mouse wheel in code with a selection | Scroll while keeping the original selection, including outside the viewport |
 | Right-click | Context menu for the selected item |
 | Left-click a tab | Select the document |
 | Middle-click a tab / × | Close the document |
