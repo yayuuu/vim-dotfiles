@@ -75,10 +75,13 @@ return {
   } },
   { "nvim-mini/mini.icons", opts = { style = use_icons and "glyph" or "ascii" } },
   { "nvim-neo-tree/neo-tree.nvim", opts = {
-    sources = { "config.project_source", "filesystem", "config.debug_source", "config.git_source", "config.tab_source" },
+    sources = { "config.project_source", "filesystem", "config.search_source", "config.debug_source", "config.git_source", "config.tab_source" },
     close_if_last_window = false,
     open_files_do_not_replace_types = { "aerial", "NvMenu", "neominimap", "snacks_terminal", "terminal", "nofile", "prompt", "quickfix", "Trouble", "trouble", "qf", "Outline" },
-    event_handlers = { { event = "after_render", handler = function(state) require("config.git").after_render(state) end },
+    event_handlers = { { event = "after_render", handler = function(state)
+      require("config.git").after_render(state)
+      if state.name == "search" then require("config.project_search").sync(state) end
+    end },
       { event = "neo_tree_window_after_open", handler = function(args) require("config.git").enter(args) end },
       { event = "neo_tree_window_before_open", handler = function(args) require("config.sidebar").prepare(args) end },
       { event = "neo_tree_window_after_open", handler = function() require("config.sidebar").schedule() end },
@@ -91,6 +94,7 @@ return {
       separator = { left = "", right = " ", override = "right" }, sources = {
       { source = "projects", display_name = "Projects" },
       { source = "filesystem", display_name = "Files" },
+      { source = "search", display_name = "Search" },
       { source = "debug", display_name = "Debug" },
       { source = "git_status", display_name = "Git" },
       { source = "buffers", display_name = "Tabs" },
@@ -127,7 +131,7 @@ return {
       ["<3-LeftRelease>"] = function(state) require("config.git").click(state) end,
       ["<4-LeftRelease>"] = function(state) require("config.git").click(state) end,
     } } },
-    window = { width = 30, mappings = {
+    window = { width = 38, mappings = {
       ["<F2>"] = function() require("config.ide").rename_file() end,
       ["<C-s>"] = function() require("config.ide").save() end,
       ["<C-f>"] = function() require("config.ide").find() end,
@@ -223,9 +227,16 @@ return {
     },
   } },
   { "sindrets/diffview.nvim", cmd = { "DiffviewOpen", "DiffviewFileHistory" }, opts = { use_icons = false } },
+  { "lewis6991/gitsigns.nvim", opts = function(_, opts)
+    -- Gitsigns hides its built-in annotation in Insert mode; our editor uses
+    -- Insert by default, so keep one shared annotation for both modes.
+    opts.current_line_blame = false
+    require("config.git_line_blame").setup()
+  end },
   { "nvzone/menu", lazy = true, dependencies = { "nvzone/volt" } },
   { "rcarriga/nvim-dap-ui", opts = function(_, opts)
     opts.expand_lines = false
+    opts.floating = { border = "rounded", max_width = 80, max_height = 20 }
     opts.select_window = function() return require("config.ide").editor_window() end
     opts.icons = { expanded = "v", collapsed = ">", current_frame = ">" }
     opts.controls = { enabled = true, icons = { pause = "||", play = ">", step_into = "v", step_over = ">|", step_out = "^", step_back = "<", run_last = "R", terminate = "X", disconnect = "D" } }
@@ -239,6 +250,8 @@ return {
   { "mfussenegger/nvim-dap", keys = {
     { "<leader>dr", function() require("config.terminals").show_debug_console() end, desc = "Debug console" },
   } },
+  -- Inspect values on demand; per-variable updates parse large files repeatedly.
+  { "theHamsta/nvim-dap-virtual-text", enabled = false },
   { "mason-org/mason.nvim", opts = function(_, opts)
     opts.ensure_installed = opts.ensure_installed or {}
     vim.list_extend(opts.ensure_installed, {

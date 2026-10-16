@@ -25,7 +25,7 @@ Files open in Insert mode. Esc switches to Normal mode;
 | Ctrl+F | Find text in the file |
 | F3 / Shift+F3 | Next / previous match |
 | Ctrl+H | Replace panel for the current file (Grug Far) |
-| Ctrl+Shift+F / Alt+F | Search the project |
+| Ctrl+Shift+F / Alt+F | Open Search in the left panel and focus its input |
 | Ctrl+G | Go to line |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+PageDown / Ctrl+PageUp | Alternative tab switching |
@@ -87,6 +87,11 @@ The code context menu also provides documentation, code actions, and formatting.
 | Esc, Esc in the terminal | Exit terminal input mode |
 
 File > Open folder opens a project. Terminal > New terminal creates a session.
+The Search tab after Files searches project contents as you type. Click **content**
+or **⇄** in **Find in content** to switch to **Find in file names**; click again to
+return. Results show each file followed by
+matching line numbers and text. Click a line to open that occurrence, or a file name
+to open its first match. Search respects ignore files and includes hidden files.
 Opening a file from Files keeps keyboard focus in the tree. Click the editor or its
 tab to type. Pasting in the same directory creates `Copy of name`; further copies
 use `Copy (2) of name`, etc. Existing files are preserved.
@@ -106,6 +111,9 @@ The command palette (Ctrl+Shift+P / Alt+P) includes Git commands. Search for `Gi
 `GitFetch`, `GitPull`, `GitPush`, `GitSync`, `GitCommit`, `GitDiff`,
 `GitFileHistory`, `GitProjectHistory`, `GitBlame`, and `GitStageHunk`.
 Selecting a command places it on the command line; press Enter to run it.
+After pausing on a line, its author, date (YYYY-MM-DD), short commit hash and subject appear at the
+end of that line, including in Insert mode. Local edits show `Uncommitted changes`.
+Git > Blame current line opens the full commit details.
 `GitMerge` opens a branch picker and merges the selected branch into the current one.
 You can also run `:GitMerge branch-name` or choose Git > Merge branch in the menu.
 `GitCommit` focuses the commit message field; Enter there commits staged changes.
@@ -125,6 +133,13 @@ You can also run `:GitMerge branch-name` or choose Git > Merge branch in the men
 Left-click expands or collapses an object. Click a breakpoint or stack frame to open
 its source; right-click provides actions appropriate to the selected item.
 Debug console opens the debugger console.
+Click its body to type at the `dap>` prompt, then press Enter to evaluate.
+PHP expressions run while the script is paused at a breakpoint, in the selected
+stack frame; this includes assignments such as `$value = 42;`.
+While paused, Ctrl+click a variable to inspect its value in a popup, or use
+right-click > Inspect variable. This also supports properties and array entries.
+Esc or × closes the popup; stepping and Continue dismiss stale values.
+Values are fetched on demand, without automatic annotations throughout the code.
 
 | Debugger shortcut | Action |
 | --- | --- |

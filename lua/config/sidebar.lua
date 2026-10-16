@@ -66,6 +66,7 @@ function M.prepare(args)
   -- default dimensions; those programmatic resizes aren't manual drags.
   if not M.changing then require("config.layout").save() end
   M.prepared, M.changing = true, true
+  if args.source ~= "search" and package.loaded["config.project_search"] then require("config.project_search").hide() end
   if args.source ~= "debug" and package.loaded["config.debugger"] then require("config.debugger").close() end
 end
 

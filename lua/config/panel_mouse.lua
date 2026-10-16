@@ -110,7 +110,7 @@ function M.setup()
     if config.relative == "" and (mouse.screencol <= position[2]
       or mouse.screencol > position[2] + api.nvim_win_get_width(win)) then return end
     -- Editors and terminal/console bodies accept cursor/input clicks anywhere.
-    if vim.bo[buf].buftype == "terminal" or vim.bo[buf].buftype == "prompt" or vim.b[buf].ide_git_input
+    if vim.bo[buf].buftype == "terminal" or vim.bo[buf].buftype == "prompt" or vim.b[buf].ide_git_input or vim.b[buf].ide_panel_header
       or vim.bo[buf].filetype == "dap-repl" or vim.b[buf].ide_hscroll or vim.b[buf].ide_vscroll
       or vim.b[buf].ide_editor_tabs or vim.b[buf].ide_diff_before or vim.b[buf].ide_diff_file
       or (config.relative == "" and require("config.ide").is_document(buf)) then return end

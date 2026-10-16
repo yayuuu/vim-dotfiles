@@ -109,7 +109,23 @@ function M.input_at_mouse(mouse)
   end
 end
 
+local function close_find_button(input)
+  if M.find_input ~= input then return end
+  local button = M.find_button
+  M.find_input, M.find_button, M.find_parent, M.find_buffer = nil, nil, nil, nil
+  -- The owner may close during a prompt callback's text lock or WinClosed.
+  -- Keep this exact helper ID so a late cleanup cannot close its replacement.
+  vim.schedule(function() if valid(button) then api.nvim_win_close(button, true) end end)
+end
+
+function M.refresh_find()
+  local input = M.find_input
+  if input and (input.closed or not input:valid() or input.win ~= M.find_parent
+    or api.nvim_win_get_buf(M.find_parent) ~= M.find_buffer) then close_find_button(input) end
+end
+
 local function find_button(win)
+  if M.find_input then close_find_button(M.find_input) end
   require("config.popup_ui").register(win.win, function() win:execute("cancel") end)
   local buf = api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
@@ -121,26 +137,36 @@ local function find_button(win)
     style = "minimal", focusable = false, mouse = true, zindex = (config.zindex or 50) + 5,
     noautocmd = true })
   vim.wo[button].winbar = ""
-  M.find_input, M.find_button = win, button
+  M.find_input, M.find_button, M.find_parent, M.find_buffer = win, button, win.win, win.buf
   win:on("WinResized", function()
-    if valid(button) and win:valid() then
+    if M.find_input == win and M.find_button == button and valid(button) and win:valid() then
       api.nvim_win_set_config(button, { relative = "win", win = win.win,
         row = -1, col = api.nvim_win_get_width(win.win) })
     end
   end)
   win:on("WinClosed", function()
-    if valid(button) then api.nvim_win_close(button, true) end
-    if M.find_input == win then M.find_input, M.find_button = nil, nil end
+    close_find_button(win)
   end, { win = true })
 end
 
 function M.find()
+  M.refresh_find()
+  if M.find_input and M.find_input:valid() then
+    local input = M.find_input
+    if not valid(M.find_button) then find_button(input) end
+    input:focus()
+    vim.cmd("startinsert!")
+    return
+  end
   local ide = require("config.ide")
   local win = ide.editor_window()
   api.nvim_set_current_win(win)
   Snacks.input({ prompt = "Find text: ", expand = false, win = {
     width = function() return math.max(1, math.min(60, vim.o.columns - 12)) end,
     on_win = find_button,
+    -- WinClosed is non-recursive and may be skipped when another closing
+    -- window cancels Find. Snacks calls this owner callback before teardown.
+    on_close = close_find_button,
     actions = { replace = function(self)
       local text = self:text()
       self:execute("cancel")
@@ -161,6 +187,9 @@ end
 
 function M.setup()
   local group = api.nvim_create_augroup("DesktopSearch", { clear = true })
+  api.nvim_create_autocmd({ "WinClosed", "BufWipeout", "WinEnter", "BufWinEnter", "VimResized" }, {
+    group = group, callback = function() vim.schedule(M.refresh_find) end,
+  })
   api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "WinEnter" }, { group = group, callback = function()
     if api.nvim_win_get_config(0).relative ~= "" or not require("config.ide").is_document(api.nvim_get_current_buf()) then return end
     vim.schedule(M.follow)

@@ -65,7 +65,7 @@ or perform operations on the user's actual repositories independently.
   A closed menu's pending mouse release must not block Files or Git clicks.
   A fresh press clears an unfinished menu gesture and detaches its old listener;
   never keep hit-testing the screen rectangle of a menu closed earlier.
-- The left side is a single column with **Projects, Files, Debug, Git, Tabs** tabs,
+- The left side is a single column with **Projects, Files, Search, Debug, Git, Tabs** tabs,
   in that order. Leave one character of padding before the first tab.
   Selecting a tab replaces the entire column's contents instead of adding a column.
 - The main editor is beside it, with a bottom panel below the editor. Opening a tool
@@ -161,6 +161,11 @@ or perform operations on the user's actual repositories independently.
   same Replace action as Ctrl+H and Search > Replace, carrying over the Find text.
   Keep its button anchored after resizing Find; relative float updates include
   both `row` and `col`, and resizing with an open Find is covered by the UI test.
+  Close the helper through Snacks' public `on_close` callback, including when
+  Find closes from another WinClosed handler. Defer native helper teardown
+  outside text locks and capture its own window ID so old callbacks cannot close
+  a replacement. Repeated Find focuses the existing input; discard a helper
+  whose owner has closed or no longer displays its original input buffer.
   Replace is one named grug-far instance in a compact floating panel at the upper
   right of the main editor, below document tabs. Keep it at most 78 columns and
   22 rows, adapting to smaller editors without adding splits. Its `×` closes the
@@ -188,6 +193,27 @@ or perform operations on the user's actual repositories independently.
   and preserves unsaved changes; project history does not store buffer contents.
 - Files shows all files by default, including dotfiles and Git-ignored entries.
   Shift+H toggles their visibility.
+- Search contains one pinned input and **Find in content ⇄** directly below its
+  tabs. Clicking the green **content / file names** text or the arrows toggles the
+  mode; the **Find in** prefix stays white. The entire label, including its mode
+  and arrows, is bold and italic. The rounded input border starts on
+  the next row without a blank line. The label, input border, summary and file
+  rows share one character of left padding, aligned with the global menu.
+  The input's right border reaches the panel edge without extra right padding.
+  Use the existing Neo-tree custom-source API and asynchronous ripgrep. Group
+  content results by relative file path with matching line numbers and excerpts
+  beneath each file. Clicking a file opens its first match; clicking a line opens
+  that occurrence in the main editor, preserving unsaved buffers and tool sessions.
+  Content search is literal with smart case; file-name search is a case-insensitive
+  substring of the relative path. Include hidden files, respect ignore files, and
+  exclude `.git`. Debounce typing, cancel obsolete jobs, and cap results at 1000.
+  Keep queries/modes/results in memory per project. Hide the pinned controls with
+  the source, retain the source selector and single column, and preserve the input
+  geometry when resizing. Ctrl+Shift+F / Alt+F and Search > Find in project select
+  this source and focus the existing input.
+  Opening results must not edit text or change document modification flags.
+  Delayed entry into Insert uses a mode-independent command, never a queued
+  literal `i`: another focus handler can enter Insert before that key is consumed.
 - Right-clicking blank space in Files opens its general context menu: New file,
   New directory, Paste, Terminal, and Repository, without Open/Rename/Copy/Delete.
   Resolve actual screen rows so EOF-clamped pointers do not target the final file.
@@ -313,6 +339,11 @@ or perform operations on the user's actual repositories independently.
   support from the process name. Clicking our scrollbar still opens scrollback.
 - **Debug console** is a permanent, nonclosable list entry using the same wide area.
   Switching preserves both the console and terminal.
+  Clicking the console or returning to it resumes native prompt input, including
+  repeated clicks in the same window and blank space below output. Preserve
+  mouse selection. Enter on the final `dap>` prompt submits it through the native
+  REPL callback even in Normal mode; Enter on results retains native tree actions.
+  Preserve command history, the selected debug frame, and the paused session.
 - View > Problems replaces the entire bottom area with diagnostics, a title, and
   a clickable **[↓ Hide]** in the top-right corner. Hide restores the previously
   visible terminal/console. If the panel was hidden, Hide only hides Problems.
@@ -324,6 +355,19 @@ or perform operations on the user's actual repositories independently.
 - The existing column contains four titled sections: **Scopes · Variables**,
   **Breakpoints · Stops**, **Call stack · Frames**, and **Watches · Expressions**.
   Switching tabs hides them while preserving the session.
+  Mount all four windows before requesting their contents. A slow or failed
+  renderer must not block the other sections or leave the opening guard set.
+  Report render errors, rebuild incomplete pane sets, and ignore callbacks from
+  earlier visits after switching sources.
+- Keep `nvim-dap-virtual-text` disabled: repeatedly parsing large documents for
+  annotations slows debugging. Inspect variables on demand through Ctrl+click
+  or the editor's Inspect variable context action while paused, using DAP UI's
+  evaluation popup. Preserve ordinary clicking, selection and document text;
+  capture the complete Ctrl+click gesture, including generic releases and lost
+  release recovery. Limit popup dimensions and close stale values on stepping
+  or continuing. Resolve PHP's leading `$`, property/array references and a
+  simple identifier fallback when no parser is available. Do not include calls
+  from a container's index expression.
 - Left-click expands/collapses variables, Watches, and thread/breakpoint groups.
   Clicking a breakpoint or stack frame opens its source in the main editor.
 - Each section has a context menu with appropriate actions and shortcuts. Variables:
@@ -342,6 +386,13 @@ or perform operations on the user's actual repositories independently.
 
 ## Git, diffs, and history
 
+- Show one Git blame annotation at the end of the current editor line after a
+  short idle delay, in both Normal and Insert mode: author, author date in
+  YYYY-MM-DD format using the commit's recorded timezone, short commit hash,
+  and subject. Mark local edits as Uncommitted changes instead of attributing
+  them to an old commit. Use asynchronous, debounced single-line Git queries,
+  short-lived caching, and discard canceled/stale results. Editable diffs use
+  their real paths and buffer contents. Do not annotate tool panels or HEAD.
 - Clicking a changed file opens one `name (diff)` tab with two columns:
   read-only HEAD and the editable current version. A shared tab bar spans
   both columns; Previous / Next buttons are below it.
@@ -397,6 +448,8 @@ or perform operations on the user's actual repositories independently.
   The Git Status title and Commit message input stay pinned; scrolling and the
   vertical scrollbar begin below them at Staged Changes. Preserve the commit
   input's width; it is part of the header and does not overlap the scrollbar.
+  Keep the commit field's right border inside the sidebar, before its native
+  vertical resize separator, including after resizing and opening diffs.
   The commit input has no close button and remains present while Git is selected.
   Keep its rounded border and geometry stable when opening diffs. Empty input
   clicks start editing; the blank-list click guard must not consume them.
@@ -503,14 +556,17 @@ or perform operations on the user's actual repositories independently.
 | `options.lua`, `keymaps.lua`, `autocmds.lua` | Options, shortcuts, and events |
 | `ide.lua`, `documents.lua` | Actions/menus, opening/saving/closing, document routing |
 | `search.lua` | Find input, Replace button, singleton panel, active file and clickable fields |
+| `project_search.lua`, `search_source.lua` | Search sidebar, pinned input/modes, streamed rg results and source navigation |
 | `editor_tabs.lua`, `tabs.lua`, `tab_source.lua` | Tab bar, MRU, Tabs source |
 | `layout.lua`, `sidebar.lua` | Proportions, column switching, graph |
 | `projects.lua`, `project_source.lua` | Project history and tab restoration |
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `terminal_mouse.lua` | Child mouse-reporting requests observed from terminal output |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
+| `debugger_inspect.lua` | On-demand variable popup, expression lookup, and Ctrl+click capture |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
+| `git_line_blame.lua` | Current-line author/commit annotation in Normal and Insert mode |
 | `rename.lua` | File/folder rename, preserved buffers/diffs, and LSP file notifications |
 | `files.lua` | Files focus, file clipboard, duplicate naming, and deletion |
 | `hscroll.lua`, `vscroll.lua`, `minimap.lua`, `popup_ui.lua` | Scrollbars, minimap, borders, and closing |
@@ -560,12 +616,16 @@ Run a single scenario:
   `breakpoint_mouse.py`, `diff_scrollbar.py`, `binary_diff_scrollbar.py`,
   `hscroll_recovery.py`, `scrollbar_placement.py`, `scrollbar_layout.py`, `staged_diff.py`;
   terminal/Problems → `terminal_input.py`, `panels.py`,
-  `debugger_panels.py`; debugger → `debugger_mouse.py`; left panel/projects →
+  `debugger_panels.py`; debugger → `debugger_mouse.py`, `debugger_recovery.py`,
+  `debugger_values.py`, `debug_console_input.py`; left panel/projects →
   `sidebar.py`, `sidebar_scroll.py`, `projects.py`; documents/history/dialogs →
   `documents.py`, `git_history_view.py`, `git_commit_preview.py`, `commit_scrollbar.py`,
   `outline_focus.py`, `picker_layout.py`, `popup_resize.py`;
   Git command palette and merging → `git_commands.py`; rebase → `git_rebase.py`;
+  Current-line Git authorship, Insert mode, and unsaved diff attribution → `git_line_blame.py`;
   Find/Replace button, panel lifecycle, field clicks and active file → `search_replace.py`;
+  Find button ownership, nested close, and repeated opening → `find_button_lifecycle.py`;
+  Search sidebar, grouped line navigation and file-name mode → `project_search.py`;
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;

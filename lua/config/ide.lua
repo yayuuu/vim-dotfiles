@@ -78,8 +78,7 @@ function M.rename_file(state)
   require("config.rename").prompt(state)
 end
 function M.search_project()
-  vim.api.nvim_set_current_win(M.editor_window())
-  Snacks.picker.grep({ cwd = M.root() })
+  require("config.project_search").show()
 end
 function M.open_folder()
   vim.ui.input({ prompt = "Open project folder: ", default = M.root() .. "/", completion = "dir" }, function(path)
@@ -571,6 +570,10 @@ function M.context_menu()
       { name = "Toggle breakpoint", rtxt = "F9", cmd = function() require("config.breakpoints").toggle() end },
       { name = "Terminal", rtxt = "Alt+T", cmd = M.terminal },
     }
+    local inspect = package.loaded["config.debugger_inspect"]
+    if inspect and inspect.available(vim.api.nvim_get_current_win()) then
+      table.insert(items, #items, { name = "Inspect variable", rtxt = "Ctrl+click", cmd = inspect.inspect })
+    end
   end
   M.popup(items)
 end

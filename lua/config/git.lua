@@ -528,7 +528,7 @@ function M.input(state, focus)
   local position = vim.api.nvim_win_get_position(state.winid)
   field.treewin, field.treebuf = state.winid, state.bufnr
   local config = { relative = "editor", row = position[1] + 2, col = position[2] + 1,
-    width = math.max(1, vim.api.nvim_win_get_width(state.winid) - 2), height = 1, border = "rounded", style = "minimal", zindex = 25 }
+    width = math.max(1, vim.api.nvim_win_get_width(state.winid) - 3), height = 1, border = "rounded", style = "minimal", zindex = 25 }
   if field.win and vim.api.nvim_win_is_valid(field.win) then vim.api.nvim_win_set_config(field.win, config)
   else field.win = vim.api.nvim_open_win(field.buf, false, config) end
   vim.wo[field.win].winbar = ""; vim.wo[field.win].winhighlight = "Normal:Visual"

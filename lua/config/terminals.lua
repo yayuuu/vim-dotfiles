@@ -4,6 +4,32 @@ local api = vim.api
 local namespace = api.nvim_create_namespace("DesktopTerminalList")
 local function valid(win) return win and api.nvim_win_is_valid(win) end
 local function buffer_valid(buf) return type(buf) == "number" and api.nvim_buf_is_valid(buf) end
+local function console_input(win, buf)
+  local row = api.nvim_buf_line_count(buf)
+  local line = api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
+  api.nvim_win_set_cursor(win, { row, #line })
+  vim.cmd("startinsert!")
+end
+
+local function attach_console(buf)
+  if vim.b[buf].ide_console_input then return end
+  vim.b[buf].ide_console_input = true
+  local enter
+  for _, mapping in ipairs(api.nvim_buf_get_keymap(buf, "n")) do
+    if mapping.lhs == "<CR>" then enter = mapping; break end
+  end
+  vim.keymap.set("n", "<CR>", function()
+    local prompt = vim.fn.prompt_getprompt(buf)
+    if api.nvim_win_get_cursor(0)[1] == api.nvim_buf_line_count(buf)
+      and prompt ~= "" and vim.startswith(api.nvim_get_current_line(), prompt) then
+      -- Use the native prompt callback, including REPL history and evaluation.
+      return "A<CR>"
+    end
+    if enter and enter.callback then vim.schedule(enter.callback); return "<Ignore>" end
+    return enter and enter.rhs or "<Ignore>"
+  end, { buffer = buf, expr = true, silent = true, desc = "Execute debug console input or open result" })
+end
+
 function M.mouse_enabled(buf)
   for _, item in ipairs(M.items) do
     if item.buf == buf then return item.mouse.enabled end
@@ -11,10 +37,13 @@ function M.mouse_enabled(buf)
 end
 local function resume_input()
   local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
-  if win ~= M.win or vim.bo[buf].buftype ~= "terminal" then return end
+  local console = M.console_active and buf == M.console_buf and vim.bo[buf].buftype == "prompt"
+  if win ~= M.win or (vim.bo[buf].buftype ~= "terminal" and not console) then return end
   vim.schedule(function()
     if valid(win) and api.nvim_get_current_win() == win and api.nvim_get_current_buf() == buf
-      and vim.fn.mode() == "n" then vim.cmd("startinsert") end
+      and vim.fn.mode() == "n" then
+      if console then console_input(win, buf) else vim.cmd("startinsert") end
+    end
   end)
 end
 local function read_proc(path)
@@ -133,11 +162,12 @@ function M.show_debug_console(focus, on_shown)
   require("config.debugger").console_buffer(function(buf)
     if generation ~= M.console_generation then return end
     M.console_active, M.console_buf = true, buf
+    attach_console(buf)
     panel()
     api.nvim_win_set_buf(M.win, buf)
     M.update_title()
     M.refresh()
-    if focus ~= false then api.nvim_set_current_win(M.win); vim.cmd("startinsert") end
+    if focus ~= false then api.nvim_set_current_win(M.win); console_input(M.win, buf) end
     if on_shown then on_shown() end
   end)
 end

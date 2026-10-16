@@ -21,7 +21,9 @@ function M.close()
 end
 
 function M.is_open()
-  return #M.wins == 4 and valid(M.wins[1]) and valid(M.wins[4])
+  if #M.wins ~= #sections or not valid(M.root) then return false end
+  for _, win in ipairs(M.wins) do if not valid(win) then return false end end
+  return true
 end
 
 function M.resize()
@@ -33,37 +35,68 @@ function M.resize()
   for index = 1, 3 do api.nvim_win_set_height(M.wins[index], height) end
 end
 
+local function render_section(section, generation)
+  require("nio").run(function()
+    if generation ~= M.generation then return end
+    local ok, err = xpcall(require("dapui").elements[section.id].render, debug.traceback)
+    if not ok then
+      vim.schedule(function()
+        if generation == M.generation then
+          vim.notify("Debug " .. section.title .. ": " .. tostring(err), vim.log.levels.ERROR)
+        end
+      end)
+    end
+  end)
+end
+
 function M.open(tree)
   if M.opening or M.is_open() then return end
+  -- An interrupted mount or a closed interior pane must not leave stale splits.
+  if M.root or #M.wins > 0 then M.close() end
   local dapui = require("dapui")
   M.generation = M.generation + 1
   local generation = M.generation
   M.opening, M.root = true, tree
   M.saved = { height = api.nvim_win_get_height(tree), winfixheight = vim.wo[tree].winfixheight }
   require("nio").run(function()
-    local buffers = {}
-    for _, section in ipairs(sections) do
-      local element = dapui.elements[section.id]
-      buffers[#buffers + 1] = element.buffer()
-      element.render()
-    end
+    local ok, buffers = xpcall(function()
+      local result = {}
+      for _, section in ipairs(sections) do result[#result + 1] = dapui.elements[section.id].buffer() end
+      return result
+    end, debug.traceback)
     vim.schedule(function()
-      local state = require("config.sidebar").state()
-      if generation ~= M.generation or not valid(tree) or not state or state.name ~= "debug" then return end
-      local previous, parent = api.nvim_get_current_win(), tree
-      for index, section in ipairs(sections) do
-        local win = api.nvim_open_win(buffers[index], false, { split = "below", win = parent,
-          height = math.max(3, math.floor(M.saved.height / 5)) })
-        M.wins[#M.wins + 1], parent = win, win
-        for key, value in pairs({ number = false, relativenumber = false, signcolumn = "no",
-          foldcolumn = "0", statuscolumn = "", wrap = false, winfixwidth = true }) do vim.wo[win][key] = value end
-        vim.wo[win].winbar = " " .. section.title .. " "
-        require("config.panel_padding").attach(win)
-        require("config.debugger_mouse").attach(buffers[index])
+      if generation ~= M.generation then return end
+      local state, current = require("config.sidebar").state()
+      if not valid(tree) or current ~= tree or not state or state.name ~= "debug" then M.close(); return end
+      if not ok then
+        M.close()
+        vim.notify("Cannot open Debug panels: " .. tostring(buffers), vim.log.levels.ERROR)
+        return
       end
+      local previous, parent = api.nvim_get_current_win(), tree
+      local mounted, err = xpcall(function()
+        for index, section in ipairs(sections) do
+          local win = api.nvim_open_win(buffers[index], false, { split = "below", win = parent,
+            height = math.max(3, math.floor(M.saved.height / 5)) })
+          M.wins[#M.wins + 1], parent = win, win
+          for key, value in pairs({ number = false, relativenumber = false, signcolumn = "no",
+            foldcolumn = "0", statuscolumn = "", wrap = false, winfixwidth = true }) do vim.wo[win][key] = value end
+          vim.wo[win].winbar = " " .. section.title .. " "
+          require("config.panel_padding").attach(win)
+          require("config.debugger_mouse").attach(buffers[index])
+        end
+        vim.wo[tree].winfixheight = true
+        M.resize()
+      end, debug.traceback)
       M.opening = false
-      vim.wo[tree].winfixheight = true
-      M.resize()
+      if not mounted then
+        M.close()
+        vim.notify("Cannot open Debug panels: " .. tostring(err), vim.log.levels.ERROR)
+      else
+        -- DAP requests can wait or fail. Mount the layout first, then render
+        -- independently so Scopes cannot block the other three sections.
+        for _, section in ipairs(sections) do render_section(section, generation) end
+      end
       if valid(previous) then api.nvim_set_current_win(previous) end
       require("config.layout").reflow()
     end)
@@ -88,11 +121,12 @@ end
 
 function M.refresh_breakpoints()
   if not M.is_open() then return end
-  require("nio").run(function() require("dapui").elements.breakpoints.render() end)
+  render_section(sections[2], M.generation)
 end
 
 function M.setup(dap)
   require("config.debugger_mouse").setup()
+  require("config.debugger_inspect").setup(dap)
   dap.listeners.after.event_initialized["dapui_config"] = function() vim.schedule(M.show) end
   -- Keep the shared sidebar and console available after the process exits.
   dap.listeners.before.event_terminated["dapui_config"] = nil

@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-sidebar-') as directory:
         assert 'ide_terminal_list' in panels()
         order = editor.lua('local s,w=require("config.sidebar").state();return vim.api.nvim_eval_statusline(vim.wo[w].winbar,{winid=w,use_winbar=true}).str')
         assert order.startswith(' '), order
-        assert order.index('Projects') < order.index('Files') < order.index('Debug') < order.index('Git') < order.index('Tabs'), order
+        assert order.index('Projects') < order.index('Files') < order.index('Search') < order.index('Debug') < order.index('Git') < order.index('Tabs'), order
         editor.lua('require("config.ide").open_project(...);require("config.ide").open_file(select(2,...));vim.cmd("stopinsert")', str(repo), str(source))
         editor.wait(lambda:current()=='filesystem' and 'aerial' in panels(), 'Files and symbols after opening project')
         editor.wait(lambda:not editor.lua('return require("config.sidebar").changing or require("config.layout").scaling'), 'Opening project settles')

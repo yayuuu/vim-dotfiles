@@ -89,6 +89,8 @@ function M.highlights()
     NeoTreeTabSeparatorInactive = { fg = p.ui_background, bg = p.ui_bar_background },
     NeoTreeNormal = { fg = p.sidebar_fg, bg = p.ui_background },
     NeoTreeNormalNC = { link = 'NeoTreeNormal' },
+    DesktopSearchLabel = { fg = p.vscFront, bg = p.ui_background, bold = true, italic = true },
+    DesktopSearchMode = { fg = p.vscGreen, bg = p.ui_background, bold = true, italic = true },
     NeoTreeEndOfBuffer = { fg = p.ui_background, bg = p.ui_background },
     NeoTreeCursorLine = { bg = p.ui_bar_background },
     DesktopPanelNormal = { fg = p.panel_fg, bg = p.ui_background },

@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-panels-') as directory:
             text = ''.join(editor.grid[row][left:left+width])
             editor.click(row, left + text.index(label) + 1)
 
-        # Ensure all five labels are visible while exercising their real clicks.
+        # Ensure all six labels are visible while exercising their real clicks.
         editor.lua('local s,w=require("config.sidebar").state();vim.api.nvim_win_set_width(w,46);require("config.layout").save()')
         choose_menu('Debugger')
         editor.wait(lambda: source() == 'debug' and editor.lua('return require("config.debugger").is_open()'), 'Debug source has four panes')
@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-panels-') as directory:
         assert [p['ft'] for p in state['panes']] == ['dapui_scopes', 'dapui_breakpoints', 'dapui_stacks', 'dapui_watches'], state
         assert all(p['left'] == state['left'] and p['width'] == state['width'] for p in state['panes']), state
         assert all(label in state['panes'][i]['title'] for i, label in enumerate(('Scopes', 'Breakpoints', 'Call stack', 'Watches'))), state
-        labels = ['Projects', 'Files', 'Debug', 'Git', 'Tabs']
+        labels = ['Projects', 'Files', 'Search', 'Debug', 'Git', 'Tabs']
         assert [state['bar'].index(label) for label in labels] == sorted(state['bar'].index(label) for label in labels), state
         assert editor.lua('return vim.api.nvim_win_get_buf(...)', main) == document
         editor.lua('require("dap.breakpoints").set({},...,2);require("nio").run(function() require("dapui").elements.breakpoints.render() end)', document)
@@ -121,6 +121,6 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-panels-') as directory:
         assert editor.lua('return vim.api.nvim_win_get_buf(...)', main) == document
         messages = editor.lua('return vim.fn.execute("messages")')
         assert 'Error executing' not in messages and 'Vim:E21' not in messages, messages
-        print('PASS: five sidebar tabs, four titled Debug panes and live breakpoints; shared persistent debug console; Problems title/Hide and both terminal visibility states', flush=True)
+        print('PASS: six sidebar tabs, four titled Debug panes and live breakpoints; shared persistent debug console; Problems title/Hide and both terminal visibility states', flush=True)
     finally:
         editor.close()
