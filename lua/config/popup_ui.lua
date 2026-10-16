@@ -23,6 +23,25 @@ function M.register(win, close)
   M.schedule()
 end
 
+function M.button_at_mouse(mouse)
+  local parent, layer
+  for win, button in pairs(M.buttons) do
+    if valid(win) and valid(button.win) then
+      local hit = mouse.winid == button.win
+      -- Repeated clicks after replacing a popup and command-line mode may
+      -- report line 0 in the underlying window instead of the float border.
+      if not hit and (vim.fn.getcmdtype() ~= "" or mouse.line == 0) then
+        local position = api.nvim_win_get_position(button.win)
+        hit = mouse.screenrow == position[1] + 1 and mouse.screencol >= position[2] + 1
+          and mouse.screencol <= position[2] + 3
+      end
+      local zindex = api.nvim_win_get_config(button.win).zindex or 0
+      if hit and (not layer or zindex > layer) then parent, layer = win, zindex end
+    end
+  end
+  return parent
+end
+
 function M.refresh()
   M.scanning = true
   for parent, button in pairs(M.buttons) do
@@ -99,18 +118,10 @@ function M.setup()
     if mouse_keys[typed] ~= nil then key = typed end
     if mouse_keys[key] == nil then return end
     local mouse = vim.fn.getmousepos()
-    for parent, button in pairs(M.buttons) do
-      local hit = mouse.winid == button.win
-      -- Command-line mode reports the underlying editor for floating clicks.
-      if not hit and valid(button.win) and vim.fn.getcmdtype() ~= "" then
-        local position = api.nvim_win_get_position(button.win)
-        hit = mouse.screenrow == position[1] + 1 and mouse.screencol >= position[2] + 1
-          and mouse.screencol <= position[2] + 3
-      end
-      if hit then
-        if mouse_keys[key] then vim.schedule(function() M.close(parent) end) end
-        return ""
-      end
+    local parent = M.button_at_mouse(mouse)
+    if parent then
+      if mouse_keys[key] then vim.schedule(function() M.close(parent) end) end
+      return ""
     end
   end, namespace)
 end

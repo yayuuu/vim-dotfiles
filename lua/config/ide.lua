@@ -356,11 +356,43 @@ function M.git_explorer()
   if state.winid and vim.api.nvim_win_is_valid(state.winid) then vim.api.nvim_set_current_win(state.winid) end
   require("config.layout").reflow()
 end
+function M.repository()
+  if vim.fn.executable("lazygit") ~= 1 then
+    vim.notify("LazyGit is not installed or is not on PATH. Install lazygit to use Repository (Alt+G). "
+      .. "The Git sidebar is available with Alt+R.", vim.log.levels.WARN)
+    return
+  end
+  return Snacks.lazygit({
+    cwd = M.root(),
+    auto_close = false,
+    win = {
+      position = "float", relative = "editor", width = 0.8, height = 0.8,
+      border = "rounded", backdrop = 60, resize = true, zindex = 50,
+      on_buf = function(win)
+        win:on("TermClose", function()
+          -- Closing the popup deletes its buffer and stops the child with -1.
+          -- Report failures only while this terminal still owns a live buffer.
+          if not win:buf_valid() then return end
+          local status = vim.v.event.status
+          if status ~= 0 then
+            Snacks.notify.error("LazyGit exited with code " .. tostring(status) .. ".\nCheck the terminal for errors.")
+            return
+          end
+          win:close()
+          vim.cmd("checktime")
+        end, { buf = true })
+      end,
+      on_win = function(win)
+        require("config.popup_ui").register(win.win, function() win:close() end)
+      end,
+    },
+  })
+end
 function M.terminal(options)
   require("config.terminals").toggle(options)
 end
-function M.new_terminal()
-  require("config.terminals").new()
+function M.new_terminal(opts)
+  return require("config.terminals").new(opts)
 end
 function M.help()
   M.open_file(vim.fn.stdpath("config") .. "/KEYBINDS.md")
@@ -688,7 +720,7 @@ function M.menu(name)
       item("Python environment...", cmd("VenvSelect")),
     },
     Git = {
-      item("Repository", function() Snacks.lazygit({ cwd = M.root() }) end, "Alt+G"),
+      item("Repository", M.repository, "Alt+G"),
       item("Refresh status", function() require("config.git").refresh() end),
       item("Switch branch...", function() require("config.git").branches() end),
       item("Merge branch...", function() require("config.git_commands").merge() end),

@@ -93,6 +93,8 @@ function M.setup()
         return ""
       end
     end
+    local popups = package.loaded["config.popup_ui"]
+    if popups and popups.button_at_mouse(mouse) then return end
     local divider = horizontal_divider(mouse)
     if divider then
       -- Native global-statusline click regions also cover horizontal split

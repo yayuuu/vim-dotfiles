@@ -182,7 +182,7 @@ end
 function M.new(opts)
   opts = opts or {}
   M.serial = M.serial + 1
-  local item = { id = M.serial, cwd = require("config.ide").root(), buf = api.nvim_create_buf(false, true), mouse = { enabled = false } }
+  local item = { id = M.serial, cwd = opts.cwd or require("config.ide").root(), buf = api.nvim_create_buf(false, true), mouse = { enabled = false } }
   vim.bo[item.buf].bufhidden = "hide"
   vim.bo[item.buf].filetype = "snacks_terminal"
   M.items[#M.items + 1] = item

@@ -215,7 +215,12 @@ or perform operations on the user's actual repositories independently.
   Delayed entry into Insert uses a mode-independent command, never a queued
   literal `i`: another focus handler can enter Insert before that key is consumed.
 - Right-clicking blank space in Files opens its general context menu: New file,
-  New directory, Paste, Terminal, and Repository, without Open/Rename/Copy/Delete.
+  New directory, Paste, and New terminal, without Open/Rename/Copy/Delete.
+  Files context menus do not contain Repository. New terminal creates a fresh
+  session in the clicked directory, a clicked file's parent, or the displayed
+  tree root for blank space. Always show the bottom terminal panel, including
+  when hidden, and preserve existing terminal sessions and editor documents.
+  If Problems is visible, replace it with the terminal area; never show both.
   Resolve actual screen rows so EOF-clamped pointers do not target the final file.
   Blank-space creation/paste targets the displayed tree root; a file targets its
   parent directory and a directory targets itself, including collapsed folders.
@@ -386,6 +391,25 @@ or perform operations on the user's actual repositories independently.
 
 ## Git, diffs, and history
 
+- Git > Repository and Alt+G share the same action opening
+  LazyGit for the project in a large, centered, bordered popup, like Plugins
+  and LazyVim Extras. Explicitly override the bottom-terminal geometry, resize
+  with the editor, and register its close button with `popup_ui` using the
+  Snacks window's public close action. Opening/closing must preserve the editor
+  layout, unsaved documents, existing terminal sessions and Problems visibility.
+  Check for the external `lazygit` executable first;
+  if absent, show a brief installation hint and point to the Git sidebar (Alt+R)
+  instead of calling Snacks and raising an exception. Document this dependency.
+  LazyGit's `e` uses a temporary remote-edit tab that document routing moves into
+  the main editor. Neominimap v3 may refresh that tab after it has closed; keep
+  the guarded tab refresh in `minimap.lua` and skip invalid tab handles without
+  suppressing other errors. Test actual LazyGit edits and preservation of unsaved
+  buffers, minimaps, panel windows and running terminal sessions.
+  Closing Repository with × intentionally stops its terminal job and must not
+  show a failure notification for that termination. Use a local TermClose handler
+  through Snacks' public callbacks, skipping a buffer already released by close.
+  Preserve normal exit cleanup/checktime and report unexpected nonzero exits,
+  retaining the failed terminal for inspection. Do not mute global notifications.
 - Show one Git blame annotation at the end of the current editor line after a
   short idle delay, in both Normal and Insert mode: author, author date in
   YYYY-MM-DD format using the commit's recorded timezone, short commit hash,
@@ -532,6 +556,10 @@ or perform operations on the user's actual repositories independently.
   including Plugins (Lazy), Mason, input, and composite Snacks pickers. Close the
   entire object through its owner's appropriate action, including its backdrop
   and callbacks. Closing input cancels entry instead of accepting it.
+  Repeated clicks after replacing a popup can report line 0 in an underlying
+  window. Share close-button screen hit testing with the blank-panel mouse guard
+  so that guard does not capture the gesture before the button handles release.
+  Preserve existing mouse capture while dragging scrollbars or dividers.
 - Command palette and Edit configuration have consistent dividers: input must not
   overlap the preview separator, and the bottom must not have a double border.
   Preserve geometry after resizing; floating window configuration must include `relative`.

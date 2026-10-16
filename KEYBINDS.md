@@ -6,6 +6,8 @@ Files open in Insert mode. Esc switches to Normal mode;
 
 ## Files and editing
 
+test
+
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+N | Create a new blank document in a new tab |

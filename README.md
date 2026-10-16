@@ -3,13 +3,24 @@
 LazyVim with a VS Code-style layout, mouse support, and Notepad++ shortcuts.
 Run `nvim` or `nvim /path/to/project`.
 
-Install Git, ripgrep, fd (`fd-find` on Debian), a C compiler, curl, tar,
+Install Git, LazyGit, ripgrep, fd (`fd-find` on Debian), a C compiler, curl, tar,
 unzip, Node.js/npm, and Python with virtual environment support. The C/C++
 configuration uses system `clangd`. On Debian these dependencies can be installed with:
 
 ```sh
-sudo apt install git ripgrep fd-find build-essential curl tar unzip nodejs npm python3-venv clangd
+sudo apt install git lazygit ripgrep fd-find build-essential curl tar unzip nodejs npm python3-venv clangd
 ```
+
+Repository in the Git menu, and Alt+G, open LazyGit for the current project in
+a large centered popup with a close button, preserving the editor and bottom
+panel layout. This requires the separate `lazygit` executable on PATH.
+If it is unavailable, the action shows an installation hint; the Git sidebar
+remains available with Alt+R.
+
+New terminal in the Files context menu creates a session in the selected folder
+or the selected file's parent directory. On blank space it uses the displayed
+tree root. It also shows the terminal panel if hidden, replacing Problems when
+visible and preserving existing sessions.
 
 On the first launch, leave Neovim running until Mason finishes installing language
 tools and Tree-sitter finishes installing parsers. Those tools are stored outside

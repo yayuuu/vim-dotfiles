@@ -114,6 +114,17 @@ local function start(mouse)
 end
 
 function M.setup()
+  -- Neominimap v3 queues TabEnter work. Remote edits can have their temporary
+  -- tab routed into the editor and closed before that scheduled refresh runs.
+  local internal = require("neominimap.window.float.internal")
+  if not M.tab_refresh_guard and type(internal.refresh_minimaps_in_tab) == "function" then
+    local refresh = internal.refresh_minimaps_in_tab
+    internal.refresh_minimaps_in_tab = function(tab)
+      if tab ~= 0 and not api.nvim_tabpage_is_valid(tab) then return end
+      return refresh(tab)
+    end
+    M.tab_refresh_guard = true
+  end
   local events = {}
   for _, modifier in ipairs({ "", "S-", "C-", "A-" }) do
     for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do

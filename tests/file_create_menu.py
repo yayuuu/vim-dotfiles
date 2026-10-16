@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-file-create-menu-') as directory:
     project.mkdir()
     source = project / 'source.txt'
     source.write_text('Original document\n')
-    folder = project / 'folder'
+    folder = project / 'folder with spaces'
     folder.mkdir()
     child = folder / 'child.txt'
     child.write_text('Child\n')
@@ -86,8 +86,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-file-create-menu-') as directory:
                 editor.lua('local t=require("config.terminals");vim.api.nvim_set_current_win(t.win);vim.cmd("startinsert")')
                 editor.wait(lambda: editor.lua('return vim.fn.mode()') == 't', 'Terminal input')
             menu = context()
-            assert all(label in menu for label in ('New file', 'New directory', 'Paste', 'Terminal', 'Repository')), menu
-            assert not any(label in menu for label in ('Open', 'Rename', 'Copy', 'Delete...')), menu
+            assert all(label in menu for label in ('New file', 'New directory', 'Paste', 'New terminal')), menu
+            assert not any(label in menu for label in ('Open', 'Rename', 'Copy', 'Delete...', 'Terminal', 'Repository')), menu
             create('New file', mode + '.txt', project / (mode + '.txt'))
             assert not (folder / (mode + '.txt')).exists()
 
@@ -137,7 +137,51 @@ with tempfile.TemporaryDirectory(prefix='nvim-file-create-menu-') as directory:
         editor.lua('require("config.ide").close_menu();vim.cmd("stopinsert")')
         editor.call('nvim_input', 'A')
         finish_create('keyboard-directory', folder / 'keyboard-directory')
+
+        # Each invocation creates a session at the clicked destination and
+        # replaces Problems or reveals a hidden bottom panel without losing jobs.
+        for target, destination, panel in (
+            (folder, folder, 'visible'),
+            (child, folder, 'hidden'),
+            (None, project, 'problems-visible'),
+            (folder, folder, 'problems-hidden'),
+            (None, project, 'visible'),
+            (source, project, 'hidden'),
+        ):
+            if panel in ('hidden', 'problems-hidden'):
+                editor.lua('require("config.terminals").hide()')
+            if panel.startswith('problems'):
+                editor.lua('require("config.problems").open()')
+                editor.wait(lambda: editor.lua('local p=require("config.problems");'
+                                              'return p.view and p.view.win and p.view.win.win '
+                                              'and vim.api.nvim_win_is_valid(p.view.win.win) and not p.suspended'),
+                            'Problems replaces the terminal area')
+            old = editor.lua('local r={};for _,i in ipairs(require("config.terminals").items) '
+                             'do r[#r+1]={buf=i.buf,job=i.job} end;return r')
+            menu = context(target)
+            assert 'New terminal' in menu and 'Terminal' not in menu and 'Repository' not in menu, menu
+            choose('New terminal')
+            editor.wait(lambda: editor.lua('return #require("config.terminals").items') == len(old) + 1,
+                        'New terminal always creates another session')
+            editor.wait(lambda: editor.lua('local t=require("config.terminals");'
+                                          'return t.win and vim.api.nvim_win_is_valid(t.win) '
+                                          'and t.list_win and vim.api.nvim_win_is_valid(t.list_win) '
+                                          'and vim.api.nvim_get_current_win()==t.win and vim.fn.mode()=="t"'),
+                        'Terminal and session list shown with terminal input')
+            item = editor.lua('return require("config.terminals").items[#require("config.terminals").items]')
+            pid = editor.lua('return vim.fn.jobpid(...)', item['job'])
+            assert Path(f'/proc/{pid}/cwd').resolve() == destination.resolve(), (panel, item, destination)
+            assert editor.lua('local p=require("config.problems");'
+                              'if p.view or p.suspended then return false end;'
+                              'for _,w in ipairs(vim.api.nvim_list_wins()) do '
+                              'if vim.bo[vim.api.nvim_win_get_buf(w)].filetype=="trouble" then return false end end;return true')
+            for previous in old:
+                assert editor.lua('return vim.api.nvim_buf_is_valid(...)', previous['buf'])
+                assert editor.lua('return vim.fn.jobwait({...},0)[1]', previous['job']) == -1
+            assert editor.call('nvim_buf_get_lines', document, 0, -1, False) == ['Unsaved document']
+            assert editor.lua('return vim.api.nvim_win_get_buf(require("config.ide").editor_window())') == document
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
         print('PASS: creation from file/directory/blank-space menus; root destination below EOF; Normal/Insert/Visual/Select/Terminal; root Paste; cancel/collisions; unsaved document preserved.')
+        print('PASS: New terminal uses folder/file/root destinations, reveals hidden panels, replaces Problems, preserves existing sessions and unsaved text.')
     finally:
         editor.close()

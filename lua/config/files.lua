@@ -131,8 +131,7 @@ function M.menu(state, node)
   if node then items[#items + 1] = { name = "Delete...", rtxt = "Delete", cmd = on_node(M.delete) } end
   vim.list_extend(items, {
     { name = "separator" },
-    { name = "Terminal", rtxt = "Alt+T", cmd = ide.terminal },
-    { name = "Repository", rtxt = "Alt+G", cmd = function() Snacks.lazygit({ cwd = ide.root() }) end },
+    { name = "New terminal", cmd = function() ide.new_terminal({ cwd = folder }) end },
   })
   return items
 end
