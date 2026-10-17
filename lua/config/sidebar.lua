@@ -170,22 +170,37 @@ function M.refresh_history()
   end)
 end
 
+function M.open_commit(row)
+  vim.cmd("stopinsert")
+  local item = type(row) == "table" and row or M.commits and M.commits[row or api.nvim_win_get_cursor(M.history_win)[1]]
+  if item then Snacks.picker({ title = "Commit " .. item.commit:sub(1, 8), cwd = item.root,
+    items = { item }, format = "git_log", preview = "git_show", main = { current = true },
+    on_change = function(picker)
+      if picker.preview.win:valid() then require("config.vscroll").attach(picker.preview.win.win) end
+    end,
+    on_close = function(picker) require("config.vscroll").detach(picker.preview.win.win) end,
+    confirm = function(picker) picker:close() end }) end
+end
+
+function M.history_menu(row)
+  local item = M.commits and M.commits[row]
+  if not item then return end
+  return {
+    { name = "View commit", cmd = function() M.open_commit(item) end },
+    { name = "Copy commit hash", cmd = function() vim.fn.setreg("+", item.commit) end },
+    { name = "separator" },
+    { name = "Refresh commits", rtxt = "F5", cmd = M.refresh_history },
+  }
+end
+
 local function history(tree)
   M.history_win, M.history_buf = list_window("ide_git_history",
     "%#NeoTreeRootName# Commits · HEAD%=%#NeoTreeTabActive#%@v:lua.DesktopGitHistoryRefresh@[⟳]%T", tree)
   local buf = M.history_buf
   M.commits = {}
-  local function open()
-    vim.cmd("stopinsert")
-    local item = M.commits and M.commits[api.nvim_win_get_cursor(M.history_win)[1]]
-    if item then Snacks.picker({ title = "Commit " .. item.commit:sub(1, 8), cwd = item.root,
-      items = { item }, format = "git_log", preview = "git_show",
-      on_change = function(picker)
-        if picker.preview.win:valid() then require("config.vscroll").attach(picker.preview.win.win) end
-      end,
-      on_close = function(picker) require("config.vscroll").detach(picker.preview.win.win) end,
-      confirm = function(picker) picker:close() end }) end
-  end
+  local function open() M.open_commit() end
+  vim.keymap.set("n", "<Left>", "<Nop>", { buffer = buf })
+  vim.keymap.set("n", "<Right>", "<Nop>", { buffer = buf })
   vim.keymap.set({ "n", "i" }, "<CR>", open, { buffer = buf, desc = "View commit" })
   for _, key in ipairs({ "<LeftRelease>", "<2-LeftRelease>", "<3-LeftRelease>", "<4-LeftRelease>" }) do
     vim.keymap.set({ "n", "i" }, key, function()
@@ -231,7 +246,7 @@ function M.update()
     if expected == "aerial" then require("config.ide").outline()
     elseif expected == "ide_git_history" then history(tree)
     elseif expected == "debug" then require("config.debugger").open(tree) end
-    api.nvim_win_set_width(tree, width)
+    if api.nvim_win_get_width(tree) ~= width then api.nvim_win_set_width(tree, width) end
     require("config.layout").apply()
   end)
   if valid(previous) then api.nvim_set_current_win(previous) end

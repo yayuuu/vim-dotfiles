@@ -159,6 +159,51 @@ local function update(s, value)
   vim.defer_fn(function() if s.generation == generation and visible(s) then run(s) end end, 200)
 end
 
+function M.toggle_mode()
+  local header = M.header
+  local s = header and session(header.root)
+  if not s or not visible(s) then return end
+  -- Typing and Shift+Tab can arrive before the queued on_lines update.
+  s.query = table.concat(api.nvim_buf_get_lines(s.input_buf, 0, -1, false), " ")
+  s.mode = s.mode == "content" and "files" or "content"
+  M.sync(s.state)
+  run(s)
+end
+
+function M.navigate_results(direction, from_input)
+  local header = M.header
+  local s = header and session(header.root)
+  if not s or not visible(s) or not s.state.tree then return end
+  local state = s.state
+  local first, last = M.rows + 1, api.nvim_buf_line_count(state.bufnr)
+  local row = from_input and first or api.nvim_win_get_cursor(state.winid)[1] + direction
+  while row >= first and row <= last do
+    local node = state.tree:get_node(row)
+    if node and (node.type == "search_file" or node.type == "search_match") then
+      vim.cmd("stopinsert")
+      api.nvim_set_current_win(state.winid)
+      local renderer = require("neo-tree.ui.renderer")
+      renderer.focus_node(state, node:get_id(), true)
+      api.nvim_win_call(state.winid, function()
+        local view = vim.fn.winsaveview()
+        if row < view.topline + M.rows then
+          view.topline = math.max(1, row - M.rows)
+          vim.fn.winrestview(view)
+        end
+      end)
+      renderer.position.save(state, true)
+      return
+    end
+    row = row + direction
+  end
+  if direction < 0 then M.focus()
+  elseif from_input then
+    vim.cmd("stopinsert")
+    api.nvim_set_current_win(state.winid)
+    keep_cursor_below_header(state)
+  end
+end
+
 function M.sync(state)
   if state.name ~= "search" then return end
   local s = session(state.path)
@@ -195,8 +240,12 @@ function M.sync(state)
         run(s)
       end, { buffer = s.input_buf })
       vim.keymap.set("n", "<Esc>", function()
-        if visible(s) then api.nvim_set_current_win(s.state.winid); keep_cursor_below_header(s.state) end
+        M.navigate_results(1, true)
       end, { buffer = s.input_buf })
+      vim.keymap.set({ "n", "i" }, "<Down>", function() M.navigate_results(1, true) end,
+        { buffer = s.input_buf, desc = "Focus search results" })
+      vim.keymap.set({ "n", "i" }, "<S-Tab>", M.toggle_mode,
+        { buffer = s.input_buf, desc = "Toggle content / file names search" })
     end
     header.input = api.nvim_open_win(s.input_buf, false, { relative = "win", win = state.winid,
       row = 1, col = 1, width = math.max(1, width - 3), height = 1,
@@ -228,6 +277,13 @@ function M.navigate(state, path, callback)
   state.path, state.dirty = path or require("config.ide").root(), false
   local s = session(state.path)
   s.state = state
+  if visible(s) then
+    -- File-watch refreshes can revisit an already displayed source. Render the
+    -- cached results directly: a temporary five-row header clamps a deep
+    -- keyboard selection before Neo-tree can restore its original position.
+    if s.dirty then run(s) else draw(s, callback) end
+    return
+  end
   -- Neo-tree has not installed the source buffer until show_nodes runs.
   local nodes = {}
   for row = 1, M.rows do nodes[#nodes + 1] = { id = "search-header-" .. row, type = "message", name = " " } end
@@ -292,6 +348,19 @@ function M.setup()
     local header = M.header
     if header then keep_cursor_below_header(session(header.root).state) end
   end })
+  api.nvim_create_autocmd({ "WinEnter", "BufEnter" }, { group = group, callback = function()
+    if not vim.b.ide_search_input then return end
+    local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+    M.input_request = (M.input_request or 0) + 1
+    local request = M.input_request
+    vim.schedule(function()
+      if request == M.input_request and valid(win) and api.nvim_get_current_win() == win and api.nvim_get_current_buf() == buf
+        and not require("config.panel_navigation").state and vim.fn.mode() == "n" then vim.cmd("startinsert!") end
+    end)
+  end })
+  api.nvim_create_autocmd("ModeChanged", { group = group, pattern = "i*:n", callback = function()
+    if vim.b.ide_search_input then M.input_request = (M.input_request or 0) + 1 end
+  end })
   local events = {}
   for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
     for _, kind in ipairs({ "Mouse", "Drag", "Release" }) do events[vim.keycode("<" .. prefix .. "Left" .. kind .. ">")] = kind end
@@ -307,9 +376,7 @@ function M.setup()
     if mouse.winid == header.win then
       if kind == "Release" and not dragged and mouse.winrow == 1
         and mouse.wincol >= header.toggle_first and mouse.wincol <= header.toggle_last then
-        local s = session(header.root)
-        s.mode = s.mode == "content" and "files" or "content"
-        vim.schedule(function() if M.header == header then M.sync(s.state); run(s) end end)
+        vim.schedule(function() if M.header == header then M.toggle_mode() end end)
       end
       return ""
     end

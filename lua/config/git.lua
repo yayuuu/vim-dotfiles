@@ -494,6 +494,25 @@ function M.commit(state)
   end)
 end
 
+function M.navigate_status(state, direction, from_input)
+  if not state.winid or not vim.api.nvim_win_is_valid(state.winid) or not state.tree
+    or vim.api.nvim_win_get_buf(state.winid) ~= state.bufnr then return end
+  local first = require("config.git_header").rows + 1
+  if vim.api.nvim_buf_line_count(state.bufnr) < first then return end
+  local row = from_input and first or vim.api.nvim_win_get_cursor(state.winid)[1] + direction
+  if row < first then M.input(state, true); return end
+  row = math.max(first, math.min(vim.api.nvim_buf_line_count(state.bufnr), row))
+  vim.cmd("stopinsert")
+  vim.api.nvim_set_current_win(state.winid)
+  vim.api.nvim_win_set_cursor(state.winid, { row, 0 })
+  -- Keyboard focus is painted by CursorLine, independently of mouse ranges.
+  -- Do not leave a Visual selection behind as the focused row changes.
+  local node = state.tree:get_node(row)
+  state.ide_selected = {}
+  state.ide_anchor = node and node.type == "file" and node:get_id() or nil
+  M.highlight(state)
+end
+
 function M.input(state, focus)
   if not state.winid or not vim.api.nvim_win_is_valid(state.winid) or vim.api.nvim_win_get_buf(state.winid) ~= state.bufnr then return end
   local root = state.path
@@ -511,6 +530,8 @@ function M.input(state, focus)
     vim.keymap.set({ "n", "i" }, "<CR>", function() vim.cmd("stopinsert"); M.commit(state) end, { buffer = buf })
     vim.keymap.set({ "n", "i" }, "<C-CR>", function() vim.cmd("stopinsert"); M.commit(state) end, { buffer = buf })
     vim.keymap.set("n", "<Esc>", function() vim.api.nvim_set_current_win(state.winid) end, { buffer = buf })
+    vim.keymap.set({ "n", "i" }, "<Down>", function() M.navigate_status(state, 1, true) end,
+      { buffer = buf, desc = "Focus Git changes" })
     local namespace = vim.api.nvim_create_namespace("DesktopIDEGitInput")
     vim.api.nvim_buf_attach(buf, false, { on_lines = function()
       vim.schedule(function()
@@ -566,6 +587,12 @@ function M.after_render(state)
   if state.name == "git_status" and state.winid and vim.api.nvim_win_is_valid(state.winid) then
     vim.keymap.set({ "n", "i", "x", "s" }, "<F5>", M.refresh,
       { buffer = state.bufnr, desc = "Refresh Git status" })
+    for key, direction in pairs({ ["<Up>"] = -1, ["<Down>"] = 1 }) do
+      vim.keymap.set("n", key, function() M.navigate_status(state, direction) end,
+        { buffer = state.bufnr, desc = "Select Git row / commit message" })
+    end
+    vim.keymap.set("n", "<Left>", "<Nop>", { buffer = state.bufnr })
+    vim.keymap.set("n", "<Right>", "<Nop>", { buffer = state.bufnr })
     M.align(state)
     M.input(state)
     require("config.git_header").sync(state)

@@ -37,14 +37,74 @@ function M.mouse_enabled(buf)
 end
 local function resume_input()
   local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+  if M.menu_context and M.menu_context.win == win and M.menu_context.buf == buf then return end
   local console = M.console_active and buf == M.console_buf and vim.bo[buf].buftype == "prompt"
   if win ~= M.win or (vim.bo[buf].buftype ~= "terminal" and not console) then return end
   vim.schedule(function()
+    if M.menu_context and M.menu_context.win == win and M.menu_context.buf == buf then return end
     if valid(win) and api.nvim_get_current_win() == win and api.nvim_get_current_buf() == buf
       and vim.fn.mode() == "n" then
       if console then console_input(win, buf) else vim.cmd("startinsert") end
     end
   end)
+end
+
+function M.context_menu(mouse, terminal_input)
+  local win, buf = mouse.winid, api.nvim_win_get_buf(mouse.winid)
+  local context = { win = win, buf = buf, input = terminal_input or vim.fn.mode() == "t" }
+  local mode = api.nvim_get_current_buf() == buf and vim.fn.mode() or "n"
+  local kinds = { v = "v", V = "V", ["\22"] = "\22", s = "v", S = "V", ["\19"] = "\22" }
+  local kind, text = kinds[mode], nil
+  if kind then
+    context.anchor, context.cursor, context.kind = vim.fn.getpos("v"), vim.fn.getpos("."), kind
+    context.select = mode == "s" or mode == "S" or mode == "\19"
+    text = vim.fn.getregion(context.anchor, context.cursor, { type = kind, exclusive = vim.o.selection == "exclusive" })
+    api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+  else
+    text = api.nvim_buf_get_lines(buf, math.max(0, mouse.line - 1), mouse.line, false)
+  end
+  local function focused()
+    return valid(win) and buffer_valid(buf) and api.nvim_win_get_buf(win) == buf and api.nvim_get_current_win() == win
+  end
+  local function resume()
+    if focused() and context.input then vim.cmd("startinsert") end
+  end
+  local function action(fn)
+    return function() if focused() then fn() end end
+  end
+  local cwd = require("config.ide").root()
+  for _, item in ipairs(M.items) do if item.buf == buf then cwd = item.cwd; break end end
+  M.menu_context = context
+  api.nvim_set_current_win(win)
+  require("config.ide").popup({
+    { name = kind and "Copy" or "Copy line", cmd = action(function()
+      vim.fn.setreg("+", text, kind or "V")
+      resume()
+    end) },
+    { name = "Paste", cmd = action(function()
+      -- Native put handles terminal paste/bracketed-paste in either input or
+      -- scrollback mode; it never edits the terminal's displayed buffer.
+      api.nvim_put(vim.split(vim.fn.getreg("+"), "\n", { plain = true }), "c", false, true)
+      vim.cmd("startinsert")
+    end) },
+    { name = "Select all", cmd = action(function()
+      api.nvim_feedkeys(vim.keycode("<C-\\><C-n>ggVG"), "ni", false)
+    end) },
+    { name = "separator" },
+    { name = "New terminal", cmd = action(function() M.new({ cwd = cwd }) end) },
+  }, nil, { on_close = function(requested)
+    if M.menu_context ~= context then return end
+    M.menu_context = nil
+    if requested or not focused() then return end
+    if context.kind then
+      vim.fn.setpos(".", context.anchor)
+      vim.cmd.normal({ args = { context.kind }, bang = true })
+      vim.fn.setpos(".", context.cursor)
+      if context.select then api.nvim_feedkeys(vim.keycode("<C-g>"), "ni", false) end
+    else
+      resume()
+    end
+  end })
 end
 local function read_proc(path)
   local fd = vim.uv.fs_open(path, "r", 0)
@@ -128,6 +188,9 @@ local function panel()
     options(M.list_win)
     vim.wo[M.list_win].winfixwidth = true
     vim.wo[M.list_win].winbar = " Terminals "
+    for _, key in ipairs({ "i", "I", "a", "A", "o", "O", "s", "S", "c", "C", "R", "<Insert>" }) do
+      vim.keymap.set("n", key, "<Nop>", { buffer = M.list_buf, silent = true })
+    end
     vim.keymap.set("n", "<CR>", function()
       local row = api.nvim_win_get_cursor(M.list_win)[1]
       if row == 1 then M.new()
@@ -159,7 +222,8 @@ function M.show_debug_console(focus, on_shown)
   if package.loaded["config.problems"] then require("config.problems").hide(false) end
   M.console_generation = (M.console_generation or 0) + 1
   local generation = M.console_generation
-  require("config.debugger").console_buffer(function(buf)
+  panel()
+  require("config.debugger").console_buffer(M.win, function(buf)
     if generation ~= M.console_generation then return end
     M.console_active, M.console_buf = true, buf
     attach_console(buf)

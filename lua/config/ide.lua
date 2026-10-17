@@ -137,7 +137,22 @@ end
 local function selection_keys(keys)
   local mode = vim.fn.mode()
   local prefix = (mode == "s" or mode == "S" or mode == "\19") and "<C-g>" or ""
-  vim.api.nvim_feedkeys(vim.keycode(prefix .. keys), "nx", false)
+  -- Execute only this action, without consuming subsequent user input while
+  -- the selection has temporarily become Normal mode.
+  vim.cmd.normal({ args = { vim.keycode(prefix .. keys) }, bang = true })
+end
+function M.edit_action(action)
+  return function(...)
+    local win, buf, mode = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf(), vim.fn.mode()
+    local editing = mode:match("^i") or mode:match("^[vVsS]") or mode == "\22" or mode == "\19"
+    action(...)
+    if editing and vim.api.nvim_get_current_win() == win and vim.api.nvim_get_current_buf() == buf
+      and vim.fn.mode() == "n" and (vim.bo[buf].buftype == "" or vim.b[buf].ide_diff_file)
+      and vim.bo[buf].modifiable and not vim.bo[buf].readonly
+      and vim.api.nvim_win_get_config(win).relative == "" and not M.is_tool_tab() then
+      vim.cmd("startinsert")
+    end
+  end
 end
 function M.new_file()
   require("config.diff").leave()
@@ -240,26 +255,37 @@ function M.tab_menu(buf)
     end },
   })
 end
-function M.copy()
+M.copy = M.edit_action(function()
   if selected() then selection_keys('"+y') else vim.cmd('normal! "+yy') end
-end
-function M.cut()
+end)
+M.cut = M.edit_action(function()
   if selected() then selection_keys('"+d') else vim.cmd('normal! "+dd') end
-end
-function M.paste()
+end)
+M.paste = M.edit_action(function()
   if selected() then selection_keys('"+p') else vim.cmd('normal! "+P') end
-end
-function M.duplicate()
+end)
+M.duplicate = M.edit_action(function()
   if selected() then
-    selection_keys('"zy"zp')
+    selection_keys('"zy"zP')
   else
     local line = vim.api.nvim_win_get_cursor(0)[1]
     local text = vim.api.nvim_buf_get_lines(0, line - 1, line, false)
     vim.api.nvim_buf_set_lines(0, line, line, false, text)
     vim.api.nvim_win_set_cursor(0, { line + 1, 0 })
   end
-end
-function M.move_lines(direction)
+end)
+M.comment = M.edit_action(function()
+  if selected() then
+    local mode = vim.fn.mode()
+    if mode == "s" or mode == "S" or mode == "\19" then
+      vim.cmd.normal({ args = { vim.keycode("<C-g>") }, bang = true })
+    end
+    vim.cmd("normal gc")
+  else
+    vim.cmd("normal gcc")
+  end
+end)
+M.move_lines = M.edit_action(function(direction)
   local selection = capture_selection()
   local editor = M.editor_window()
   vim.api.nvim_set_current_win(editor)
@@ -281,13 +307,13 @@ function M.move_lines(direction)
   end
   vim.api.nvim_win_set_cursor(0, { cursor[1] + direction, cursor[2] })
   if selection then
-    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+    vim.cmd.normal({ args = { vim.keycode("<C-\\><C-n>") }, bang = true })
     selection.anchor[1] = selection.anchor[1] + direction
     selection.cursor[1] = selection.cursor[1] + direction
     restore_selection(selection)
-    vim.api.nvim_feedkeys(vim.keycode("<C-g>"), "nx", false)
+    vim.cmd.normal({ args = { vim.keycode("<C-g>") }, bang = true })
   end
-end
+end)
 function M.find()
   require("config.search").find()
 end
@@ -414,13 +440,30 @@ function M.close_menu()
   require("menu.utils").delete_old_menus()
   M.menu_name = nil
 end
-function M.popup(items)
+function M.popup(items, statusline, opts)
+  opts = opts or {}
+  local action_requested = false
+  statusline = statusline or vim.b.ide_menu_statusline or vim.wo.statusline
   M.close_menu()
+  if not M.menu_close_guard then
+    M.menu_close_guard = true
+    local volt = require("volt")
+    local close = volt.close
+    volt.close = function(buf)
+      local target = buf or vim.api.nvim_get_current_buf()
+      if target == M.popup_buffer and vim.api.nvim_buf_is_valid(target) then
+        -- Menu's click/Enter callbacks normally feed q with the x flag. That
+        -- runs a nested input loop and exposes intermediate UI updates.
+        return M.close_menu()
+      end
+      return close(buf)
+    end
+  end
   -- Menu's default mouse mode installs a global click handler that closes
   -- a newly opened toolbar menu when switching between menu headings.
   pcall(vim.keymap.del, "n", "<LeftMouse>")
   vim.cmd("stopinsert")
-  local mouse = vim.fn.getmousepos()
+  local mouse = opts.mouse or vim.fn.getmousepos()
   local source_win, source_buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
   items = vim.deepcopy(items)
   for _, item in ipairs(items) do
@@ -429,6 +472,7 @@ function M.popup(items)
       -- Let the mouse press and the menu's focus restoration finish before
       -- opening another prompt/window from a menu action.
       item.cmd = function()
+        action_requested = true
         vim.schedule(function()
           if vim.api.nvim_win_is_valid(source_win) and vim.api.nvim_buf_is_valid(source_buf) then
             vim.api.nvim_set_current_win(source_win)
@@ -444,12 +488,29 @@ function M.popup(items)
   require("menu").open(items, { mouse = false, border = true })
   local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
   M.popup_buffer = buf
+  vim.b[buf].ide_menu_statusline = statusline
   vim.wo[win].winbar = ""
+  -- A focused float owns the global statusline too. Keep the source's fully
+  -- rendered Lualine format instead of a blank line followed by menu details.
+  vim.wo[win].statusline = statusline
   -- Mouse focus/repeated clicks can preserve Insert or selection mode.
   -- Volt feeds q to dismiss; use its existing close action in these modes too.
   local close_menu = vim.fn.maparg("q", "n", false, true).callback
   if close_menu then
-    vim.keymap.set({ "i", "x", "s" }, "q", close_menu, { buffer = buf, silent = true })
+    local function close()
+      close_menu()
+      if vim.api.nvim_win_is_valid(source_win) and vim.api.nvim_get_current_win() == source_win
+        and vim.api.nvim_win_get_buf(source_win) == source_buf
+        and M.is_document(source_buf) and vim.bo[source_buf].modifiable and not vim.bo[source_buf].readonly
+        and not M.is_tool_tab() then
+        -- Return to editor input before the next frame, rather than exposing
+        -- NORMAL on the status bar until the delayed focus handler runs.
+        vim.cmd("startinsert")
+      end
+    end
+    for _, key in ipairs({ "q", "<Esc>" }) do
+      vim.keymap.set({ "n", "i", "x", "s" }, key, close, { buffer = buf, silent = true })
+    end
   end
   for _, item in ipairs(items) do
     if item.cmd and item.rtxt then
@@ -506,12 +567,14 @@ function M.popup(items)
   vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(win), once = true, callback = function()
     vim.schedule(function()
       closed = true
+      if M.popup_buffer == buf then M.menu_name = nil; vim.cmd("redrawtabline") end
       -- Keyboard dismissal must not leave a mouse listener over the old popup.
       -- A mouse action keeps it only until the matching release arrives.
       if not pressed and M.popup_buffer == buf then
         M.popup_buffer, M.menu_name = nil, nil
         vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
       end
+      if opts.on_close then opts.on_close(action_requested) end
     end)
   end })
   vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = function()
@@ -519,13 +582,30 @@ function M.popup(items)
       if vim.api.nvim_buf_is_valid(buf) and M.popup_buffer == buf then M.close_menu() end
     end)
   end })
+  require("config.menu_navigation").attach(win, buf, items)
 end
-function M.context_menu()
+function M.context_menu(terminal_input)
   if require("config.mouse_capture").active() then return end
   local debugger = package.loaded["config.debugger_mouse"]
   local pointer = vim.fn.getmousepos()
   if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
     and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].filetype == "NvMenu" then return end
+  if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
+    and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].buftype == "terminal" then
+    require("config.terminals").context_menu(pointer, terminal_input)
+    return
+  end
+  if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
+    and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].filetype == "ide_git_history" then
+    local row = require("config.panel_mouse").row(pointer)
+    local items = row and require("config.sidebar").history_menu(row)
+    if not items then return end
+    vim.cmd("stopinsert")
+    vim.api.nvim_set_current_win(pointer.winid)
+    vim.api.nvim_win_set_cursor(pointer.winid, { row, 0 })
+    M.popup(items)
+    return
+  end
   if pointer.winid ~= 0 and vim.api.nvim_win_is_valid(pointer.winid)
     and vim.bo[vim.api.nvim_win_get_buf(pointer.winid)].filetype == "neo-tree" then
     local state = require("neo-tree.sources.manager").get_state_for_window(pointer.winid)
@@ -637,24 +717,19 @@ function M.outline()
     end
   end
   M.outline_busy = true
+  local created
   local ok, err = pcall(function()
-    -- Aerial can close the previously focused dialog while opening Symbols.
-    -- Restore focus explicitly below, checking validity, rather than letting
-    -- win_call restore a window that may no longer exist.
-    vim.api.nvim_set_current_win(editor)
-    require("aerial").open({ focus = false, direction = "left" })
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "aerial" then
-        local pos, treepos = vim.api.nvim_win_get_position(win), vim.api.nvim_win_get_position(tree)
-        if pos[2] ~= treepos[2] or pos[1] <= treepos[1] then
-          vim.fn.win_splitmove(win, tree, { vertical = false, rightbelow = true })
-        end
-        vim.api.nvim_win_set_height(win, math.min(14, math.max(5, math.floor(vim.o.lines * 0.3))))
-        vim.wo[win].winfixheight = true
-        require("config.layout").apply("outline")
-      end
-    end
+    -- Create the final split directly. Opening beside the editor and moving
+    -- it afterwards resizes the entire workspace, including terminal children.
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[buf].bufhidden = "wipe"
+    created = vim.api.nvim_open_win(buf, false, { split = "below", win = tree,
+      height = math.min(14, math.max(5, math.floor(vim.o.lines * 0.3))) })
+    require("aerial").open_in_win(created, editor)
+    vim.wo[created].winfixheight = true
+    require("config.layout").apply("outline")
   end)
+  if not ok and created and vim.api.nvim_win_is_valid(created) then vim.api.nvim_win_close(created, true) end
   if vim.api.nvim_win_is_valid(previous) then vim.api.nvim_set_current_win(previous) end
   M.outline_busy = false
   if not ok then vim.notify(err, vim.log.levels.ERROR) end
@@ -665,12 +740,13 @@ function M.menu_width()
   for _, name in ipairs(menu_names) do width = width + vim.fn.strdisplaywidth(name) + 2 end
   return width
 end
-function M.menu(name)
+function M.menu(name, keyboard)
   if M.menu_name == name and M.popup_buffer and vim.api.nvim_buf_is_valid(M.popup_buffer) then
     M.close_menu()
     return
   end
   local selection = capture_selection()
+  local statusline = vim.b.ide_menu_statusline or vim.wo.statusline
   M.close_menu()
   vim.api.nvim_set_current_win(M.editor_window())
   local function edit_action(fn)
@@ -696,7 +772,7 @@ function M.menu(name)
       item("Undo", cmd("undo"), "Ctrl+Z"), item("Redo", cmd("redo"), "Ctrl+Y"),
       { name = "separator" }, item("Copy", edit_action(M.copy), "Ctrl+C"), item("Cut", edit_action(M.cut), "Ctrl+X"), item("Paste", edit_action(M.paste), "Ctrl+V"),
       item("Select all", cmd("normal! ggVG" .. vim.keycode("<C-g>")), "Ctrl+A"), item("Duplicate line", edit_action(M.duplicate), "Ctrl+D"),
-      item("Comment line", cmd("normal gcc"), "Ctrl+Q"),
+      item("Comment line", edit_action(M.comment), "Ctrl+Q"),
       item("Format file", function() require("conform").format({ lsp_fallback = true }) end),
     },
     Search = {
@@ -747,8 +823,23 @@ function M.menu(name)
       item("Health check", cmd("checkhealth")), item("Edit configuration", function() Snacks.picker.files({ cwd = vim.fn.stdpath("config") }) end),
     },
   }
-  M.popup(menus[name])
+  local options
+  if keyboard then
+    local column = 1
+    for _, heading in ipairs(menu_names) do
+      if heading == name then break end
+      column = column + vim.fn.strdisplaywidth(heading) + 2
+    end
+    options = { mouse = { screenrow = 1, screencol = column } }
+  end
+  M.popup(menus[name], statusline, options)
   M.menu_name = name
+  vim.cmd("redrawtabline")
+end
+function M.step_menu(direction)
+  for index, name in ipairs(menu_names) do
+    if name == M.menu_name then M.menu(menu_names[(index - 1 + direction) % #menu_names + 1], true); return end
+  end
 end
 _G.DesktopIDEMenu = function(id, _, button)
   if button == "l" and menu_names[id] then M.menu(menu_names[id]) end
@@ -771,9 +862,13 @@ _G.DesktopIDERepository = function()
   return string.rep(" ", start - menu_width) .. name
 end
 function M.menu_bar()
+  return "%!v:lua.DesktopIDEMenuBar()"
+end
+_G.DesktopIDEMenuBar = function()
   local parts = { "%#WinBar#" }
   for id, name in ipairs(menu_names) do
-    parts[#parts + 1] = "%" .. id .. "@v:lua.DesktopIDEMenu@ " .. name .. " %T"
+    parts[#parts + 1] = (name == M.menu_name and "%#DesktopNavigationTab#" or "%#WinBar#")
+      .. "%" .. id .. "@v:lua.DesktopIDEMenu@ " .. name .. " %T"
   end
   parts[#parts + 1] = "%#DesktopRepositoryName#%{v:lua.DesktopIDERepository()}%#WinBar#"
   return table.concat(parts)

@@ -79,6 +79,16 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-selection-') as directory:
             return editor.lua('local s=require("neo-tree.sources.manager").get_state("git_status");return #vim.api.nvim_buf_get_extmarks(s.bufnr,'
                               'vim.api.nvim_create_namespace("DesktopIDEGitSelection"),0,-1,{details=true})')
         assert highlights()==3
+        # Keyboard movement clears a mouse range and moves just the current-row
+        # highlight. Moving back must not recreate the Visual selection.
+        for arrow in ['<Down>', '<Up>']:
+            editor.call('nvim_input',arrow)
+            time.sleep(.1);editor.lua('vim.cmd("redraw!")')
+            assert selected()==[] and highlights()==0, 'Arrow navigation clears the mouse range'
+            assert editor.lua('return vim.fn.mode()')=='n'
+            assert editor.lua('return require("config.diff").active.buf')==proxy
+        click(str(files['a']));click(str(files['c']),True)
+        assert selected()==expected and highlights()==3
         # Some terminal paths drop Shift on release. It must not become a new
         # plain click that clears the range or opens the last file's diff.
         for mode in ['normal','insert']:

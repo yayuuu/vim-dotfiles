@@ -3,18 +3,20 @@ local map = vim.keymap.set
 local ide = require("config.ide")
 local edit = { "n", "i", "x", "s" }
 local function action(key, fn, desc, modes)
-  map(modes or edit, key, fn, { desc = desc, silent = true })
+  map(modes or edit, key, ide.edit_action(fn), { desc = desc, silent = true })
 end
 action("<C-n>", ide.new_file, "New file")
 action("<C-o>", ide.pick_file, "Open file")
 action("<C-s>", ide.save, "Save file")
 action("<C-S-s>", ide.save_as, "Save as")
 action("<C-w>", ide.close_file, "Close file")
+map({ "x", "s" }, "<Esc>", "<C-\\><C-n>", { desc = "Leave selection in Normal mode" })
 map(edit, "<C-a>", "<Esc>ggVG<C-g>", { desc = "Select all" })
 map("s", "<Tab>", "<C-g>>gv<C-g>", { desc = "Indent selection" })
 map("x", "<Tab>", ">gv<C-g>", { desc = "Indent selection" })
 map("s", "<S-Tab>", "<C-g><gv<C-g>", { desc = "Unindent selection" })
 map("x", "<S-Tab>", "<gv<C-g>", { desc = "Unindent selection" })
+map("i", "<S-Tab>", "<C-d>", { desc = "Unindent current line" })
 action("<C-c>", ide.copy, "Copy selection or line")
 action("<C-x>", ide.cut, "Cut selection or line")
 map({ "n", "x", "s" }, "<C-v>", ide.paste, { desc = "Paste" })
@@ -40,10 +42,7 @@ action("<C-Tab>", function() vim.cmd("BufferLineCycleNext") end, "Next file")
 action("<C-S-Tab>", function() vim.cmd("BufferLineCyclePrev") end, "Previous file")
 action("<C-PageDown>", function() vim.cmd("BufferLineCycleNext") end, "Next file")
 action("<C-PageUp>", function() vim.cmd("BufferLineCyclePrev") end, "Previous file")
-action("<C-q>", function() vim.cmd("normal gcc") end, "Toggle comment", { "n" })
-map("i", "<C-q>", "<Cmd>normal gcc<CR>", { desc = "Toggle comment" })
-map("x", "<C-q>", "gc", { desc = "Toggle comment", remap = true })
-map("s", "<C-q>", "<C-g><Cmd>normal gc<CR>", { desc = "Toggle comment" })
+action("<C-q>", ide.comment, "Toggle comment")
 action("<C-S-e>", ide.explorer, "Project explorer")
 action("<C-S-g>", ide.git_explorer, "Git changes")
 action("<M-g>", ide.repository, "Repository (LazyGit)")
@@ -75,16 +74,19 @@ for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
 map({ "n", "x", "s", "i", "t" }, "<" .. prefix .. "RightMouse>", function()
   local mouse = vim.fn.getmousepos()
   local terminal = vim.fn.mode() == "t"
-  if terminal and (mouse.winid == 0 or not vim.api.nvim_win_is_valid(mouse.winid)
-    or vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].filetype ~= "neo-tree") then
-    return "<RightMouse>"
+  if terminal and mouse.winid ~= 0 and vim.api.nvim_win_is_valid(mouse.winid) then
+    local buf = vim.api.nvim_win_get_buf(mouse.winid)
+    -- Preserve mouse-aware children and terminal jobs owned by other plugins.
+    if vim.bo[buf].buftype == "terminal" and require("config.terminals").mouse_enabled(buf) ~= false then
+      return "<" .. prefix .. "RightMouse>"
+    end
   end
   if mouse.winid ~= 0 and vim.api.nvim_win_is_valid(mouse.winid)
     and mouse.winrow == 1 and vim.wo[mouse.winid].winbar ~= ""
     and vim.bo[vim.api.nvim_win_get_buf(mouse.winid)].buftype == "" then
     return "<RightMouse>" -- Let the file tab handle its own context menu.
   end
-  vim.schedule(ide.context_menu)
+  vim.schedule(function() ide.context_menu(terminal) end)
   return terminal and "<C-\\><C-n>" or "<Ignore>"
 end, { desc = "Context menu", expr = true })
 end

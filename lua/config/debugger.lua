@@ -111,12 +111,15 @@ function M.show()
   require("config.sidebar").schedule()
 end
 
-function M.console_buffer(callback)
-  local dapui = require("dapui")
-  require("nio").run(function()
-    local buf = dapui.elements.repl.buffer()
-    vim.schedule(function() callback(buf) end)
+function M.console_buffer(win, callback)
+  -- DAP UI's buffer helper creates and closes a temporary split. With fixed
+  -- terminal heights that redistributes the editor and bottom panel. Reuse our
+  -- existing window through the public REPL API instead (:buffer is a no-op
+  -- until the API installs its own prompt buffer).
+  local buf = api.nvim_win_call(win, function()
+    return require("dap").repl.open({ signcolumn = "no", winfixheight = true }, "buffer")
   end)
+  callback(buf)
 end
 
 function M.refresh_breakpoints()

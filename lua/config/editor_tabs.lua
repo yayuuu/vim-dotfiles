@@ -74,6 +74,7 @@ function M.draw()
     end
   end
   M.count = #groups
+  M.ids = vim.tbl_map(function(group) return group.id end, groups)
   local colors = require("config.colors")
   local separator = colors.tab_separator(target)
   local transparent = colors.palette.ui_background == "NONE"
@@ -96,7 +97,8 @@ function M.draw()
       local size = vim.fn.strdisplaywidth(part_text)
       if size > 0 then
         hits[#hits + 1] = { first = column + 1, last = column + size, id = group.id, close = part.close }
-        if part.highlight then spans[#spans + 1] = { first = byte, last = byte + #part_text, hl = part.highlight } end
+        local highlight = group.id == M.preview and "DesktopNavigationTab" or part.highlight
+        if highlight then spans[#spans + 1] = { first = byte, last = byte + #part_text, hl = highlight } end
         text, column, byte = text .. part_text, column + size, byte + #part_text
       end
     end

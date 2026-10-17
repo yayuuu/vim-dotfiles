@@ -65,11 +65,52 @@ or perform operations on the user's actual repositories independently.
   A closed menu's pending mouse release must not block Files or Git clicks.
   A fresh press clears an unfinished menu gesture and detaches its old listener;
   never keep hit-testing the screen rectangle of a menu closed earlier.
+  Opening, switching and dismissing menus preserve the rendered global status
+  bar, including document details and colors. Seed each popup's statusline before
+  its first frame and use a Lualine extension to retain the source format during
+  timer refreshes. Returning to an editable document resumes Insert before the
+  next frame, avoiding an intermediate Normal-mode badge. Verify individual UI
+  flushes with `tests/menu_statusline.py`, not only the final settled screen.
+  Menus open without a selected row or visible text caret. Down/Up select the
+  first/last action initially, then move vertically with wrapping, skipping
+  separators. Left/Right switch top-level menu headings with wrapping; context
+  menus ignore horizontal navigation. Enter runs the highlighted
+  action and does nothing before a selection. Use the existing full-row mouse
+  hover appearance for keyboard selection too: pointer movement temporarily
+  takes over the one visible highlight; leaving the menu restores the last
+  keyboard row, or no selection if there was none. Reset selection on each
+  popup and restore the original cursor styling when it closes or loses focus.
+  Keep the menu/Volt hover-ID adapter local to `menu_navigation.lua`, recheck
+  it after plugin updates, and verify the rendered rows and cursor style with
+  `tests/menu_navigation.py`.
 - The left side is a single column with **Projects, Files, Search, Debug, Git, Tabs** tabs,
   in that order. Leave one character of padding before the first tab.
   Selecting a tab replaces the entire column's contents instead of adding a column.
 - The main editor is beside it, with a bottom panel below the editor. Opening a tool
   must not squeeze the editor into a thin strip or create duplicate panels.
+- Alt+A previews the current panel's tabs first: document cards in the editor,
+  or sidebar source tabs from Files/Symbols and other sidebar sections. Left/Right
+  highlight a candidate without opening it; Enter commits, Esc cancels. In document
+  tab selection, q closes the highlighted card through the shared close action,
+  retaining save/discard/cancel prompts. Continue selection at the next surviving
+  card; canceling a close keeps its candidate selected. Consume repeated q across
+  asynchronous closes and focus changes; after the last card retain an empty
+  selection until Enter, Esc or a mouse press, so held q cannot edit the placeholder.
+  Keep real save-dialog input available. Verify bursts/held keys and slow prompts
+  with `tests/panel_tab_repeat.py`. If there
+  are no tabs (such as a terminal), start panel selection directly. Another Alt+A
+  selects panels spatially with all four arrows and a bright frame, retaining
+  focus, mode and window geometry until Enter. Another Alt+A opens File in the
+  global menu; the menu bar is also a spatial panel candidate above the editor.
+  Mouse presses cancel preview before normal click handling and perform the
+  clicked action, including a tab scrolled into view during preview. Restore
+  temporary mappings and caret styling; Esc also restores tab scrolling.
+  Convert numeric mapping flags to booleans when restoring Lua keymaps,
+  especially replace_keycodes=0 for completion callbacks returning encoded keys.
+  Preserve actual arrow movement without inserting key bytes after selection;
+  cover real Blink mappings with `tests/panel_navigation_keys.py`.
+  Never send selection keystrokes to a terminal child. Keep this in
+  `panel_navigation.lua`, verified with `tests/panel_navigation.py`.
 - Open files, the shortcuts guide, `:help`, `:checkhealth` reports, and similar
   documents as additional buffer tabs in the main editor. Remove extra splits
   created by help commands. `q` closes a help/report tab while preserving the main window.
@@ -94,8 +135,16 @@ or perform operations on the user's actual repositories independently.
   Neo-tree's file-follow/reveal lookup must resolve diff document URIs to their
   actual file paths on either side. Never scan URI components as directories.
 - Creating Symbols may close the previously focused dialog. Restore focus only
-  if that window still exists; avoid automatic window restoration around Aerial.open
+  if that window still exists; avoid automatic window restoration around Aerial.open_in_win
   that can target a closed window or leave focus in the Symbols panel.
+- Switching to Files must not temporarily resize the editor or terminal. Create
+  Symbols directly below the tree and bind it with Aerial.open_in_win. Keep the
+  Aerial `aerial_set_width` compatibility flag in our plugin adapter so cached
+  widths and delayed renders do not resize the column. Recheck this internal
+  integration after Aerial updates. Skip applying unchanged window dimensions.
+  Menu mouse/Enter actions close through the existing close callback; scope our
+  Volt.close adapter to our own popup rather than feeding q into a nested input
+  loop. The construction/geometry regression is `tests/ui_stability.py`.
 
 ## Tabs above the editor
 
@@ -150,6 +199,17 @@ or perform operations on the user's actual repositories independently.
   `i` returns to Insert mode. Clicking code on the right side of a diff enters Insert mode.
 - Preserve mouse and Shift selection, copy/cut/paste,
   duplication, and movement of entire selected blocks.
+- Editing actions started in Insert or Select/Visual mode retain the selection
+  or resume Insert when they finish in the same editable document. Copying a
+  selection resumes Insert, as do cut, paste and duplication; comment/indent/move
+  actions may retain Select. Esc explicitly enters Normal, including from a
+  selection created in Insert. Preserve deliberate Normal-mode editing after Esc
+  and the modes of tool panels, read-only documents and dialogs. Execute selection
+  edits without draining queued user input in an intermediate Normal mode.
+- Shift+Tab in editor Insert mode decreases the current line's indentation by
+  one shiftwidth from any cursor position and stays in Insert. Completion and
+  snippet navigation must not intercept it. Preserve selection unindent and the
+  Search panel's local Shift+Tab mode toggle.
 - Scrolling the editor with the mouse wheel must preserve both endpoints of
   character, line and rectangular selections, including reversed Select/Visual
   ranges. Selected text may leave the viewport without extending the range.
@@ -229,6 +289,17 @@ or perform operations on the user's actual repositories independently.
   the source, retain the source selector and single column, and preserve the input
   geometry when resizing. Ctrl+Shift+F / Alt+F and Search > Find in project select
   this source and focus the existing input.
+  Search results remain in Normal mode with a hidden caret and full-row selection.
+  Up/Down choose file/match rows, skipping the summary and pinned placeholders.
+  Up above the first result enters the input in Insert; Down from the input
+  returns to results in Normal, also safely when there are no matches. Keyboard
+  scrolling must reveal rows above the pinned header instead of clamping back.
+  Refreshing an already visible source renders its cached rows directly, keeping
+  the selected result and viewport; a temporary header-only buffer loses them.
+  Include the bordered search input in Alt+A panel selection and resume Insert
+  on entry. Shift+Tab in either the input or result list uses the same mode toggle
+  as the label, preserves query/focus/mode, and searches the latest typed text.
+  Verify these transitions with `tests/search_keyboard.py`.
   Opening results must not edit text or change document modification flags.
   Delayed entry into Insert uses a mode-independent command, never a queued
   literal `i`: another focus handler can enter Insert before that key is consumed.
@@ -253,6 +324,12 @@ or perform operations on the user's actual repositories independently.
   `Copy (2) of name`, etc., without overwriting existing files. Keep copies binary-safe,
   retain the file clipboard for repeated pastes, and preserve unsaved editor contents.
   Clicking the editor/tab moves keyboard focus to it and enters Insert mode.
+  Files and Symbols remain in Normal mode, hide the text caret and highlight the
+  whole selected row. Preserve other sources' input and selection modes. Shift+F10
+  opens the selected file/folder's context menu at that row without using a stale
+  mouse position. Also accept the optional Kitty standalone LEFT_ALT key event;
+  ordinary terminals do not report bare modifier keys or distinguish left/right
+  Alt in Alt+A. Do not require a terminal-specific keyboard protocol or host setup.
   File-type icons use mini.icons in `glyph` mode rather than letter badges.
   Rendering requires a font with Nerd Fonts symbols; keep this independent of
   the terminal/GUI and do not change its font as part of Neovim configuration.
@@ -342,6 +419,8 @@ or perform operations on the user's actual repositories independently.
 - Switching sessions preserves the editor document. Sessions have a clickable ×;
   a new session can still be created after closing the last one. Exiting a shell
   removes its session from the list.
+  The Terminals session list stays in Normal mode with full-row selection and
+  no text caret, including entry from Insert/terminal input through Alt+A.
 - The header shows the current program and directory, e.g. `bash - ~/project`,
   instead of a fixed Terminal label. Update it after `cd` and when a program starts.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
@@ -360,8 +439,22 @@ or perform operations on the user's actual repositories independently.
   handling, even if history exists. Observe reporting modes through the public
   job stdout callback, including sequences split across chunks; do not infer
   support from the process name. Clicking our scrollbar still opens scrollback.
+- Right-click in an ordinary managed terminal uses our shared popup/navigation
+  for Copy (or Copy line), Paste, Select all, and New terminal. Dismissal restores
+  input or scrollback mode and any selection. Copy publishes through the native
+  clipboard provider; Paste uses native terminal put, preserving bracketed paste
+  and buffer contents. Menu navigation must not send keys to the child. Keep the
+  context/restore guard in `terminals.lua` and use the shared popup close callback.
+  Forward right-button presses/releases to mouse-reporting children, and preserve
+  native handling for terminal jobs owned by other plugins. Verify PTY bytes,
+  cross-process clipboard transfers and session/document preservation with
+  `tests/terminal_menu.py`.
 - **Debug console** is a permanent, nonclosable list entry using the same wide area.
   Switching preserves both the console and terminal.
+  First and repeated opening preserve native window dimensions and saved panel
+  proportions. Initialize the REPL through its public open API in the existing
+  terminal window; DAP UI's buffer helper creates a temporary split and must not
+  be used here. Verify keyboard/mouse entry with `tests/terminal_navigation.py`.
   Clicking the console or returning to it resumes native prompt input, including
   repeated clicks in the same window and blank space below output. Preserve
   mouse selection. Enter on the final `dap>` prompt submits it through the native
@@ -498,6 +591,16 @@ or perform operations on the user's actual repositories independently.
   Shift+click selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
   in Staged Changes.
+- Git Status and Commits use Normal mode, a hidden caret and full-row selection.
+  Up/Down in Git Status moves only the current-row highlight, clearing earlier
+  mouse selections without creating a Visual selection; retain Shift/Ctrl mouse
+  range selection. Shift+F10 opens the same item
+  menu as right-click, anchored at the keyboard row. Commits offers View commit,
+  Copy commit hash and Refresh commits; closing its preview returns to the list.
+  Up at the first visible Git Status row enters Commit message in Insert mode.
+  Down from that input returns to the first status row in Normal mode, preserving
+  the draft. Include the existing bordered input among Alt+A panel candidates;
+  preview frames do not alter native geometry. Verify with `tests/git_keyboard.py`.
 - Clicks in the empty area below Git Status rows do not open the last file or
   alter range selections. Check the rendered screen row; Neovim clamps the mouse
   buffer line to EOF even when the pointer is below the list.
@@ -624,6 +727,8 @@ or perform operations on the user's actual repositories independently.
 | `init.lua`, `lua/config/lazy.lua` | Startup, LazyVim, imports, Lazy window |
 | `options.lua`, `keymaps.lua`, `autocmds.lua` | Options, shortcuts, and events |
 | `ide.lua`, `documents.lua` | Actions/menus, opening/saving/closing, document routing |
+| `menu_navigation.lua` | Shared keyboard/mouse row selection, hidden menu caret and cursor restoration |
+| `panel_navigation.lua` | Alt+A tab previews, spatial panel frames, menu access and Normal Files/Symbols |
 | `search.lua` | Find input, Replace button, singleton panel, active file and clickable fields |
 | `project_search.lua`, `search_source.lua` | Search sidebar, pinned input/modes, streamed rg results and source navigation |
 | `editor_tabs.lua`, `tabs.lua`, `tab_source.lua` | Tab bar, MRU, Tabs source |
@@ -696,9 +801,11 @@ Run a single scenario:
   Find/Replace button, panel lifecycle, field clicks and active file → `search_replace.py`;
   Find button ownership, nested close, and repeated opening → `find_button_lifecycle.py`;
   Search sidebar, grouped line navigation and file-name mode → `project_search.py`;
+  Search field/results keyboard focus, Normal highlights, scrolling and Shift+Tab → `search_keyboard.py`;
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
-  editing → `comment_selection.py`, `editor_focus_input.py`; document creation → `new_file.py`;
+  editing → `comment_selection.py`, `editor_focus_input.py`; selection action modes,
+  Escape and queued typing → `editing_modes.py`; document creation → `new_file.py`;
   Offscreen mouse/keyboard selections, copy, typing and terminal paste → `selection_scroll.py`.
   system clipboard provider selection and cross-process Copy/Cut/Paste → `clipboard.py`;
   file/folder renaming → `file_rename.py`;
@@ -716,6 +823,12 @@ Run a single scenario:
   Empty panel/list clicks → `panel_empty_click.py`.
   Dialog layers and pinned Git header → `scrollbar_layering.py`.
   Top menu switching and repeated-heading clicks → `menu_switch.py`.
+  Tab/panel keyboard previews, mouse cancellation and terminal key isolation → `panel_navigation.py`.
+  Completion mapping flags and real editor arrows after panel/tab selection → `panel_navigation_keys.py`.
+  Closing previewed cards with q, repeated selection and unsaved prompts → `panel_tab_close.py`.
+  Held/queued q across closes, dialogs and the final card → `panel_tab_repeat.py`.
+  Git keyboard rows/context menus and Commit message focus/mode → `git_keyboard.py`.
+  Normal terminal list and console opening without layout changes → `terminal_navigation.py`.
   Global menu clicks above diff columns across resizing → `diff_menu.py`.
   Terminal keypad navigation and preserved numeric input → `terminal_keypad.py`.
   Command input geometry while completion is visible → `cmdline_popup.py`.

@@ -86,10 +86,12 @@ function M.apply(role)
     local size = M.ratios[name] and math.floor(M.ratios[name] * extent + 0.5) or M.sizes[name]
     if win and size and (not role or name == role) then
       if name == "tree" or name == "terminal_sessions" then
-        vim.api.nvim_win_set_width(win, math.max(1, math.min(math.max(18, size), extent - 10)))
+        local width = math.max(1, math.min(math.max(18, size), extent - 10))
+        if vim.api.nvim_win_get_width(win) ~= width then vim.api.nvim_win_set_width(win, width) end
       else
         local maximum = name == "history" and history_limit(wins) or extent - 4
-        vim.api.nvim_win_set_height(win, math.max(1, math.min(math.max(4, size), maximum)))
+        local height = math.max(1, math.min(math.max(4, size), maximum))
+        if vim.api.nvim_win_get_height(win) ~= height then vim.api.nvim_win_set_height(win, height) end
       end
     end
   end

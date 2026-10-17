@@ -18,15 +18,15 @@ with tempfile.TemporaryDirectory(prefix='nvim-outline-focus-') as directory:
                    'require("aerial.window").close_all();'
                    'local buf=vim.api.nvim_create_buf(false,true);vim.bo[buf].bufhidden="wipe";'
                    'local dialog=vim.api.nvim_open_win(buf,true,{relative="editor",row=5,col=10,width=20,height=2,style="minimal"});'
-                   'local original=aerial.open;aerial.open=function(opts) '
-                   'if vim.api.nvim_win_is_valid(dialog) then vim.api.nvim_win_close(dialog,true) end;return original(opts) end;'
-                   'ide.outline();aerial.open=original')
+                   'local original=aerial.open_in_win;aerial.open_in_win=function(target,source) '
+                   'if vim.api.nvim_win_is_valid(dialog) then vim.api.nvim_win_close(dialog,true) end;return original(target,source) end;'
+                   'ide.outline();aerial.open_in_win=original')
         editor.wait(lambda: editor.lua('return require("aerial").is_open()'), 'Symbols opens after dialog closes')
         assert editor.lua('return require("config.ide").editor_window()') == main
         assert not editor.lua('return require("config.ide").outline_busy')
         messages = editor.lua('return vim.fn.execute("messages")')
         assert 'Invalid window id' not in messages, messages
         assert editor.lua('return vim.api.nvim_get_current_win()') == main
-        print('PASS: Symbols creation tolerates a dialog closing during Aerial.open, preserves the editor, and releases the outline guard.')
+        print('PASS: Symbols creation tolerates a dialog closing during Aerial.open_in_win, preserves the editor, and releases the outline guard.')
     finally:
         editor.close()

@@ -74,7 +74,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-clipboard-') as directory:
                 def copy_key():
                     # Feed the mapped key through Neovim's input machinery;
                     # raw CTRL-C via nvim_input may interrupt the RPC itself.
-                    editor.lua('vim.api.nvim_feedkeys(vim.keycode("<C-c>"),"mtx!",false)')
+                    # Queue input without a nested input loop: copying now resumes
+                    # Insert, so feedkeys("x!") would wait for more user input.
+                    editor.lua('vim.api.nvim_feedkeys(vim.keycode("<C-c>"),"mt",false)')
 
                 def copied(text):
                     def transferred():
@@ -109,6 +111,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-clipboard-') as directory:
                         editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Insert mode')
                     copy_key()
                     copied(original[line - 1] + '\n')
+                    editor.wait(lambda: editor.lua('return vim.fn.mode()') == ('i' if mode == 'insert' else 'n'), 'Copy retains the editing mode')
                     assert editor.lua('return vim.api.nvim_buf_get_lines(0,0,-1,false)') == original
 
                 for mode in ('select', 'visual'):
@@ -119,6 +122,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-clipboard-') as directory:
                         editor.lua('vim.api.nvim_feedkeys(vim.keycode("<C-g>"),"nx",false)')
                     copy_key()
                     copied(original[0])
+                    editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Copy selection resumes Insert')
                     assert editor.lua('return vim.api.nvim_buf_get_lines(0,0,-1,false)') == original
 
                 reset()
@@ -126,6 +130,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-clipboard-') as directory:
                 editor.wait(lambda: editor.lua('return vim.fn.mode()') == 's', 'Cut selection')
                 editor.call('nvim_input', '<C-x>')
                 copied(original[0])
+                editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Cut selection resumes Insert')
                 assert editor.lua('return vim.api.nvim_buf_get_lines(0,0,-1,false)') == ['', *original[1:]]
 
                 # Pasting text written by an independent process must bypass old data.

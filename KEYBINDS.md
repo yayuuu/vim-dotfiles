@@ -3,6 +3,37 @@
 Run `nvim` or `nvim /path/to/project`.
 Files open in Insert mode. Esc switches to Normal mode;
 `i` returns to Insert mode. F1 or Help opens this guide.
+Editing shortcuts preserve Select or Insert; Copy, Cut and Paste on a selection
+return to Insert. Esc also switches directly from a selection to Normal.
+
+Menus open without a selected item. Down/Up selects the first/last action;
+further presses move between actions. Enter runs the highlighted action.
+Moving the mouse highlights its row; leaving the menu restores the last keyboard
+selection. Left/Right switches headings in the top menu. Esc closes the menu.
+
+## Keyboard navigation
+
+Press **Alt+A** to select a tab: Left/Right highlights document tabs in the editor,
+or Projects / Files / Search / Debug / Git / Tabs from the sidebar. **Enter**
+opens the highlighted tab; **Esc** cancels without changing it.
+While selecting document tabs, **q** closes the highlighted tab and continues
+selection. Unsaved changes use the usual Save / Don't save / Cancel dialog.
+After closing the last card, Enter, Esc or a mouse click exits selection.
+
+Press **Alt+A again** to choose a panel. All four arrow keys move a bright frame
+between panels; Enter moves keyboard focus there. A terminal starts with panel
+selection immediately. Press Alt+A once more to open the first top menu, or
+select the menu bar with Up and Enter. In that menu, Left/Right changes headings
+and Up/Down chooses an action. Clicking with the mouse cancels tab/panel selection
+and performs the click normally.
+
+Files and Symbols use Normal mode with a highlighted row and no text caret.
+The Terminals session list uses the same selection; Up/Down chooses an entry
+and Enter opens the terminal or Debug console.
+**Shift+F10** opens the selected file/folder's context menu. Bare left Alt also
+opens it if the terminal sends standalone modifier events; most terminals do not.
+Alt+A works with standard terminal key reporting, which does not distinguish
+left and right Alt.
 
 ## Files and editing
 
@@ -22,6 +53,7 @@ test
 | Ctrl+Shift+↑ / Ctrl+Shift+↓ | Move the current line or selected block up / down |
 | Shift+Home / Shift+End | Select from the cursor to the start / end of the line |
 | Tab / Shift+Tab with a selection | Increase / decrease the indentation of selected lines |
+| Shift+Tab in Insert | Decrease the current line's indentation from any cursor position |
 | Ctrl+L | Delete the line |
 | Ctrl+Q | Comment/uncomment the line or all selected lines |
 | Ctrl+F | Find text in the file |
@@ -90,11 +122,18 @@ The code context menu also provides documentation, code actions, and formatting.
 | Esc, Esc in the terminal | Exit terminal input mode |
 
 File > Open folder opens a project. Terminal > New terminal creates a session.
+Right-click in the terminal opens Copy (or Copy line), Paste, Select all, and
+New terminal in the shared menu. Applications that handle mouse input receive
+their own right clicks. Esc closes the menu and restores the previous input,
+scrollback, or selection.
 The Search tab after Files searches project contents as you type. Click **content**
 or **⇄** in **Find in content** to switch to **Find in file names**; click again to
 return. Results show each file followed by
 matching line numbers and text. Click a line to open that occurrence, or a file name
 to open its first match. Search respects ignore files and includes hidden files.
+In Search, Down from the input selects results in Normal mode; Up above the first
+result returns to the input in Insert mode. Shift+Tab switches content / file names
+from either area, keeping the query. Alt+A panel selection also includes the input.
 Opening a file from Files keeps keyboard focus in the tree. Click the editor or its
 tab to type. Pasting in the same directory creates `Copy of name`; further copies
 use `Copy (2) of name`, etc. Existing files are preserved.
@@ -102,6 +141,10 @@ use `Copy (2) of name`, etc. Existing files are preserved.
 R / F5 in the Git panel refreshes the status. Shift+click selects a range of files,
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard
 and Commit are available in the Git panel and its menu. Discard requires confirmation.
+Git Status and Commits highlight whole rows in Normal mode. Shift+F10 opens the
+selected item's context menu. Up at the start of Git Status enters Commit message;
+Down from that input returns to the status list. The input is also available
+through Alt+A panel selection and enters Insert automatically when selected.
 When a file appears in both groups, opening it from Changes compares against its staged version.
 Click the branch name to select a branch. Type a new name with no matching branches
 and press Enter to create and switch to it. The `[↑… ↓…]` button synchronizes

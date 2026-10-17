@@ -56,12 +56,20 @@ return {
         end
         return
       end
+      local target = select(3, ...)
+      if target and vim.api.nvim_win_is_valid(target) and vim.api.nvim_win_get_config(target).relative == "" then
+        -- open_in_win still applies Aerial's cached/default width on first
+        -- render. This internal flag keeps our custom split's existing width,
+        -- including when an asynchronous symbol refresh finishes later.
+        vim.w[target].aerial_set_width = true
+      end
       return open(...)
     end
   end },
   -- LazyVim's completion configuration uses the v1 API; v2 changes it and adds blink.lib.
   { "saghen/blink.cmp", version = "1.*", opts = { keymap = {
     ["<C-y>"] = false, ["<C-n>"] = false, ["<C-f>"] = false,
+    ["<S-Tab>"] = false,
     ["<Tab>"] = { "select_and_accept", "snippet_forward", "fallback" },
   } } },
   { "Mofiqul/vscode.nvim", priority = 1000, opts = function() return require("config.colors").theme_options() end },
@@ -186,6 +194,15 @@ return {
     end })
   end },
   { "nvim-lualine/lualine.nvim", opts = function(_, opts)
+    -- The menu component already contains the source's complete statusline,
+    -- including alignment. Do not append a second middle divider to it.
+    opts.options.always_divide_middle = false
+    opts.extensions = opts.extensions or {}
+    opts.extensions[#opts.extensions + 1] = {
+      filetypes = { "NvMenu" },
+      sections = { lualine_a = { { function() return vim.b.ide_menu_statusline or "" end,
+        padding = 0, separator = "" } } },
+    }
     opts.options.theme = require("config.colors").statusline()
     opts.options.component_separators = { left = "|", right = "|" }
     opts.options.section_separators = { left = "", right = "" }
