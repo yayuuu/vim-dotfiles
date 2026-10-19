@@ -65,6 +65,9 @@ or perform operations on the user's actual repositories independently.
   A closed menu's pending mouse release must not block Files or Git clicks.
   A fresh press clears an unfinished menu gesture and detaches its old listener;
   never keep hit-testing the screen rectangle of a menu closed earlier.
+  Keep release-guard recovery in a persistent `menu_mouse.lua` listener, separate
+  from individual popups. A new press clears orphaned guards even if a popup's
+  old listener disappeared; delayed cleanup only affects its own popup state.
   Opening, switching and dismissing menus preserve the rendered global status
   bar, including document details and colors. Seed each popup's statusline before
   its first frame and use a Lualine extension to retain the source format during
@@ -378,10 +381,24 @@ or perform operations on the user's actual repositories independently.
   Leave one character of left padding before each commit graph row.
   Disable whitespace markers in the commit list: trailing graph spaces must not
   appear as extra dashes beside branch connections.
-  Render the commit graph with Unicode nodes, lines, and rounded branch turns
-  (`●`, `│`, `─`, `╭`, `╮`, `╰`, `╯`) instead of ASCII or diagonal strokes.
-  Combine turns with existing lanes at junctions. Convert only the graph prefix; preserve commit subjects,
-  branch names, hashes, row-to-commit mappings, and branch/merge topology.
+  Render the commit graph like LazyGit: one row per commit, `◯` for ordinary
+  commits, `⏣` for merges, and rounded Unicode connections. Build lanes from full
+  parent hashes instead of converting Git's ASCII graph row by row, which can
+  invent loops and junctions. Keep the local LazyGit v0.50.0 adapter in
+  `git_graph.lua`, with its MIT notice in `LICENSES/lazygit.txt`; compare it with
+  upstream fixtures after changes. Preserve subjects, branch names, hashes,
+  row-to-commit mappings and topology, including shared bases and octopus merges.
+  Map LazyGit's default MD5/HSL author colors to the nearest existing ANSI color
+  from `terminal_0` through `terminal_15`, using Oklab distance. Prefer colors with
+  contrast at least 3 against the panel background (use `terminal_0` as the
+  reference for transparent backgrounds); if none qualify, use the ANSI color
+  with the highest contrast. Never introduce another RGB for author nodes or
+  edges. Assignments are deterministic, may repeat for different authors, and
+  adapt to the active palette. Crossing edges retain their separate colors when
+  their palette assignments differ. Keep the color implementation and highlight
+  definitions in `colors.lua`, and recalculate assignments on colorscheme reload.
+  Focusing a commit highlights its parent paths as in
+  LazyGit. Test geometry, RGBs and rendered highlights with `tests/commit_graph.py`.
 - All left panels prevent scrolling into empty space when their content fits.
   Clamp vertical mouse scrolling before it changes the viewport, including the
   final partial wheel step. Do not allow overshoot followed by a visible snap back.
@@ -733,6 +750,7 @@ or perform operations on the user's actual repositories independently.
 | `options.lua`, `keymaps.lua`, `autocmds.lua` | Options, shortcuts, and events |
 | `ide.lua`, `documents.lua` | Actions/menus, opening/saving/closing, document routing |
 | `menu_navigation.lua` | Shared keyboard/mouse row selection, hidden menu caret and cursor restoration |
+| `menu_mouse.lua` | Persistent popup gesture/release guard and recovery of orphaned click blocks |
 | `panel_navigation.lua` | Alt+A tab previews, spatial panel frames, menu access and Normal Files/Symbols |
 | `search.lua` | Find input, Replace button, singleton panel, active file and clickable fields |
 | `project_search.lua`, `search_source.lua` | Search sidebar, pinned input/modes, streamed rg results and source navigation |
@@ -745,6 +763,7 @@ or perform operations on the user's actual repositories independently.
 | `debugger_inspect.lua` | On-demand variable popup, expression lookup, and Ctrl+click capture |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
+| `git_graph.lua` | Local LazyGit graph routing/rendering adapter based on commit parents |
 | `git_line_blame.lua` | Current-line author/commit annotation in Normal and Insert mode |
 | `rename.lua` | File/folder rename, preserved buffers/diffs, and LSP file notifications |
 | `files.lua` | Files focus, file clipboard, duplicate naming, and deletion |
@@ -817,6 +836,7 @@ Run a single scenario:
   informational tree rows → `tree_messages.py`; file clicks across modes and
   recovery after a lost scrollbar/menu release → `tree_click.py`.
   Git-file clicks after a lost menu release → `git_selection.py`.
+  LazyGit-compatible graph topology, ANSI author colors, selected paths and commit rows → `commit_graph.py`.
   Empty Git Status clicks → `git_empty_click.py`.
   File clipboard/focus and deletion → `file_clipboard.py`.
   File/directory creation and blank Files context menus → `file_create_menu.py`.

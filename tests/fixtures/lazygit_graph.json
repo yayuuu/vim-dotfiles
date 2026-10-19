@@ -1,0 +1,1243 @@
+{
+  "source": "LazyGit v0.50.0 graph_test.go; Copyright (c) 2018 Jesse Duffield; MIT: LICENSES/lazygit.txt",
+  "fixtures": [
+    {
+      "name": "with some merges",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "5",
+            "7"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "7",
+          "parents": [
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "8"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "8",
+          "parents": [
+            "9"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "9",
+          "parents": [
+            "A",
+            "B"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "B",
+          "parents": [
+            "D"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "D",
+          "parents": [
+            "D"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "A",
+          "parents": [
+            "E"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "E",
+          "parents": [
+            "F"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "F",
+          "parents": [
+            "D"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "D",
+          "parents": [
+            "G"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "◯",
+        "◯",
+        "⏣─╮",
+        "│ ◯",
+        "◯─╯",
+        "◯",
+        "⏣─╮",
+        "│ ◯",
+        "│ ◯",
+        "◯ │",
+        "◯ │",
+        "◯ │",
+        "◯─╯"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "3",
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "6"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "6",
+          "parents": [
+            "7"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "│ ⏣─╮",
+        "◯─╯ │",
+        "◯───╯",
+        "◯"
+      ]
+    },
+    {
+      "name": "with a new commit",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "3",
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "Z",
+          "parents": [
+            "Z"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "6"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "6",
+          "parents": [
+            "7"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "│ ⏣─╮",
+        "│ │ │ ◯",
+        "◯─╯ │ │",
+        "◯───╯ │",
+        "◯ ╭───╯"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left and continues",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "7",
+            "8"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "7"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "7",
+          "parents": [
+            "11"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "⏣─│─╮",
+        "⏣─│─│─╮",
+        "│ ◯─╯ │",
+        "◯─╯ ╭─╯"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left and continues",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "7",
+            "8"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "7",
+          "parents": [
+            "4",
+            "A"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "B"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "B",
+          "parents": [
+            "C"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "⏣─│─╮",
+        "⏣─│─│─╮",
+        "⏣─│─│─│─╮",
+        "◯─┴─╯ │ │",
+        "◯ ╭───╯ │"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left and continues",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2",
+            "3"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "4",
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "6",
+            "7"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "6",
+          "parents": [
+            "8"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "⏣─╮",
+        "│ ◯",
+        "⏣─│",
+        "⏣─│─╮",
+        "◯ │ │"
+      ]
+    },
+    {
+      "name": "new merge path fills gap before continuing path on right",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2",
+            "3",
+            "4",
+            "5"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "A"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "A",
+          "parents": [
+            "6",
+            "B"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "B",
+          "parents": [
+            "C"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "⏣─┬─┬─╮",
+        "│ │ ◯ │",
+        "◯─│─╯ │",
+        "⏣─│─╮ │",
+        "│ │ ◯ │"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left and continues",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "7",
+            "8"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "7",
+          "parents": [
+            "4",
+            "A"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "B"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "B",
+          "parents": [
+            "C"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "C",
+          "parents": [
+            "D"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "⏣─│─╮",
+        "⏣─│─│─╮",
+        "⏣─│─│─│─╮",
+        "◯─┴─╯ │ │",
+        "◯ ╭───╯ │",
+        "◯ │ ╭───╯"
+      ]
+    },
+    {
+      "name": "with a path that has room to move to the left and continues",
+      "commits": [
+        {
+          "commit": "1",
+          "parents": [
+            "2"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "2",
+          "parents": [
+            "3",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "3",
+          "parents": [
+            "5",
+            "4"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "5",
+          "parents": [
+            "7",
+            "G"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "7",
+          "parents": [
+            "8",
+            "A"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "8",
+          "parents": [
+            "4",
+            "E"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "4",
+          "parents": [
+            "B"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "B",
+          "parents": [
+            "C"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "C",
+          "parents": [
+            "D"
+          ],
+          "author": "Fixture Author"
+        },
+        {
+          "commit": "D",
+          "parents": [
+            "F"
+          ],
+          "author": "Fixture Author"
+        }
+      ],
+      "expected": [
+        "◯",
+        "⏣─╮",
+        "⏣─│─╮",
+        "⏣─│─│─╮",
+        "⏣─│─│─│─╮",
+        "⏣─│─│─│─│─╮",
+        "◯─┴─╯ │ │ │",
+        "◯ ╭───╯ │ │",
+        "◯ │ ╭───╯ │",
+        "◯ │ │ ╭───╯"
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "name": "single cell",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a",
+          "target": "b",
+          "kind": 0,
+          "author": "cyan"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "b",
+          "target": "c",
+          "kind": 1,
+          "author": "green"
+        }
+      ],
+      "expected": "◯",
+      "styles": [
+        "green"
+      ],
+      "previous": "a"
+    },
+    {
+      "name": "single cell, selected",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a",
+          "target": "selected",
+          "kind": 0,
+          "author": "cyan"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "c",
+          "kind": 1,
+          "author": "green"
+        }
+      ],
+      "expected": "◯",
+      "styles": [
+        "highlightStyle"
+      ],
+      "previous": "a"
+    },
+    {
+      "name": "terminating hook and starting hook, selected",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a",
+          "target": "selected",
+          "kind": 0,
+          "author": "cyan"
+        },
+        {
+          "from": 1,
+          "to": 0,
+          "source": "c",
+          "target": "selected",
+          "kind": 0,
+          "author": "yellow"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "d",
+          "kind": 1,
+          "author": "green"
+        },
+        {
+          "from": 0,
+          "to": 1,
+          "source": "selected",
+          "target": "e",
+          "kind": 1,
+          "author": "green"
+        }
+      ],
+      "expected": "⏣─╮",
+      "styles": [
+        "highlightStyle",
+        "highlightStyle",
+        "highlightStyle"
+      ],
+      "previous": "a"
+    },
+    {
+      "name": "terminating hook and starting hook, prioritise the terminating one",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a",
+          "target": "b",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 1,
+          "to": 0,
+          "source": "c",
+          "target": "b",
+          "kind": 0,
+          "author": "magenta"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "b",
+          "target": "d",
+          "kind": 1,
+          "author": "green"
+        },
+        {
+          "from": 0,
+          "to": 1,
+          "source": "b",
+          "target": "e",
+          "kind": 1,
+          "author": "green"
+        }
+      ],
+      "expected": "⏣─│",
+      "styles": [
+        "green",
+        "green",
+        "magenta"
+      ],
+      "previous": "a"
+    },
+    {
+      "name": "starting and terminating pipe sharing some space",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "b1",
+          "target": "b2",
+          "kind": 2,
+          "author": "magenta"
+        },
+        {
+          "from": 3,
+          "to": 0,
+          "source": "e1",
+          "target": "a2",
+          "kind": 0,
+          "author": "green"
+        },
+        {
+          "from": 0,
+          "to": 2,
+          "source": "a2",
+          "target": "c3",
+          "kind": 1,
+          "author": "yellow"
+        }
+      ],
+      "expected": "⏣─│─┬─╯",
+      "styles": [
+        "yellow",
+        "yellow",
+        "magenta",
+        "yellow",
+        "yellow",
+        "green",
+        "green"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "starting and terminating pipe sharing some space, with selection",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "selected",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "b1",
+          "target": "b2",
+          "kind": 2,
+          "author": "magenta"
+        },
+        {
+          "from": 3,
+          "to": 0,
+          "source": "e1",
+          "target": "selected",
+          "kind": 0,
+          "author": "green"
+        },
+        {
+          "from": 0,
+          "to": 2,
+          "source": "selected",
+          "target": "c3",
+          "kind": 1,
+          "author": "yellow"
+        }
+      ],
+      "expected": "⏣───╮ ╯",
+      "styles": [
+        "highlightStyle",
+        "highlightStyle",
+        "highlightStyle",
+        "highlightStyle",
+        "highlightStyle",
+        "nothing",
+        "green"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "many terminating pipes",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 1,
+          "to": 0,
+          "source": "b1",
+          "target": "a2",
+          "kind": 0,
+          "author": "magenta"
+        },
+        {
+          "from": 2,
+          "to": 0,
+          "source": "c1",
+          "target": "a2",
+          "kind": 0,
+          "author": "green"
+        }
+      ],
+      "expected": "◯─┴─╯",
+      "styles": [
+        "yellow",
+        "magenta",
+        "magenta",
+        "green",
+        "green"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "starting pipe passing through",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 0,
+          "to": 3,
+          "source": "a2",
+          "target": "d3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "b1",
+          "target": "b3",
+          "kind": 2,
+          "author": "magenta"
+        },
+        {
+          "from": 2,
+          "to": 2,
+          "source": "c1",
+          "target": "c3",
+          "kind": 2,
+          "author": "green"
+        }
+      ],
+      "expected": "⏣─│─│─╮",
+      "styles": [
+        "yellow",
+        "yellow",
+        "magenta",
+        "yellow",
+        "green",
+        "yellow",
+        "yellow"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "starting and terminating path crossing continuing path",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 0,
+          "to": 1,
+          "source": "a2",
+          "target": "b3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "b1",
+          "target": "a2",
+          "kind": 2,
+          "author": "green"
+        },
+        {
+          "from": 2,
+          "to": 0,
+          "source": "c1",
+          "target": "a2",
+          "kind": 0,
+          "author": "magenta"
+        }
+      ],
+      "expected": "⏣─│─╯",
+      "styles": [
+        "yellow",
+        "yellow",
+        "green",
+        "magenta",
+        "magenta"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "another clash of starting and terminating paths",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 0,
+          "to": 1,
+          "source": "a2",
+          "target": "b3",
+          "kind": 1,
+          "author": "yellow"
+        },
+        {
+          "from": 2,
+          "to": 2,
+          "source": "c1",
+          "target": "c3",
+          "kind": 2,
+          "author": "green"
+        },
+        {
+          "from": 3,
+          "to": 0,
+          "source": "d1",
+          "target": "a2",
+          "kind": 0,
+          "author": "magenta"
+        }
+      ],
+      "expected": "⏣─┬─│─╯",
+      "styles": [
+        "yellow",
+        "yellow",
+        "yellow",
+        "magenta",
+        "green",
+        "magenta",
+        "magenta"
+      ],
+      "previous": "a1"
+    },
+    {
+      "name": "commit whose previous commit is selected",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "yellow"
+        }
+      ],
+      "expected": "◯",
+      "styles": [
+        "yellow"
+      ],
+      "previous": "selected"
+    },
+    {
+      "name": "commit whose previous commit is selected and is a merge commit",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "selected",
+          "target": "b3",
+          "kind": 2,
+          "author": "red"
+        }
+      ],
+      "expected": "◯ │",
+      "styles": [
+        "highlightStyle",
+        "nothing",
+        "highlightStyle"
+      ],
+      "previous": "selected"
+    },
+    {
+      "name": "commit whose previous commit is selected and is a merge commit, with continuing pipe inbetween",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "selected",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 1,
+          "to": 1,
+          "source": "z1",
+          "target": "z3",
+          "kind": 2,
+          "author": "green"
+        },
+        {
+          "from": 2,
+          "to": 2,
+          "source": "selected",
+          "target": "b3",
+          "kind": 2,
+          "author": "red"
+        }
+      ],
+      "expected": "◯ │ │",
+      "styles": [
+        "highlightStyle",
+        "nothing",
+        "green",
+        "nothing",
+        "highlightStyle"
+      ],
+      "previous": "selected"
+    },
+    {
+      "name": "when previous commit is selected, not a merge commit, and spawns a continuing pipe",
+      "pipes": [
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a1",
+          "target": "a2",
+          "kind": 0,
+          "author": "red"
+        },
+        {
+          "from": 0,
+          "to": 0,
+          "source": "a2",
+          "target": "a3",
+          "kind": 1,
+          "author": "green"
+        },
+        {
+          "from": 0,
+          "to": 1,
+          "source": "a2",
+          "target": "b3",
+          "kind": 1,
+          "author": "green"
+        },
+        {
+          "from": 1,
+          "to": 0,
+          "source": "selected",
+          "target": "a2",
+          "kind": 0,
+          "author": "yellow"
+        }
+      ],
+      "expected": "⏣─╯",
+      "styles": [
+        "highlightStyle",
+        "highlightStyle",
+        "highlightStyle"
+      ],
+      "previous": "selected"
+    }
+  ]
+}

@@ -34,6 +34,118 @@ end
 M.palette = palette
 local repository_name = ''
 
+-- LazyGit v0.50.0 colors graph edges by their originating commit's author.
+-- Use its MD5/HSL color as a reference, then choose an existing ANSI color.
+-- Copyright (c) 2018 Jesse Duffield; MIT license: LICENSES/lazygit.txt.
+local author_colors = {}
+local author_candidates
+
+local function color_coordinates(hex)
+  local channels = {}
+  for index = 1, 3 do
+    local channel = tonumber(hex:sub(index * 2, index * 2 + 1), 16) / 255
+    channels[index] = channel <= 0.04045 and channel / 12.92 or ((channel + 0.055) / 1.055) ^ 2.4
+  end
+  local r, g, b = unpack(channels)
+  local l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ^ (1 / 3)
+  local m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ^ (1 / 3)
+  local s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ^ (1 / 3)
+  return { 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s }, 0.2126 * r + 0.7152 * g + 0.0722 * b
+end
+
+local function terminal_author_color(reference)
+  if not author_candidates then
+    author_candidates = {}
+    local background = M.palette.ui_background == 'NONE' and M.palette.terminal_0 or M.palette.ui_background
+    local _, luminance = color_coordinates(background)
+    local readable, highest_contrast = {}, nil
+    for index = 0, 15 do
+      local color = M.palette['terminal_' .. index]
+      local lab, brightness = color_coordinates(color)
+      local contrast = (math.max(luminance, brightness) + 0.05) / (math.min(luminance, brightness) + 0.05)
+      local candidate = { color = color, lab = lab, contrast = contrast }
+      if contrast >= 3 then readable[#readable + 1] = candidate end
+      if not highest_contrast or contrast > highest_contrast.contrast then highest_contrast = candidate end
+    end
+    -- An unusual palette may have no contrasting ANSI color. Keep the best
+    -- available one rather than introducing an RGB outside the user's sixteen.
+    author_candidates = #readable > 0 and readable or { highest_contrast }
+  end
+  local lab = color_coordinates(reference)
+  local nearest, distance
+  for _, candidate in ipairs(author_candidates) do
+    local delta = 0
+    for index = 1, 3 do delta = delta + (lab[index] - candidate.lab[index]) ^ 2 end
+    if not distance or delta < distance then nearest, distance = candidate.color, delta end
+  end
+  return nearest
+end
+
+local function md5_bytes(text)
+  local function little(value)
+    local bytes = {}
+    for index = 1, 4 do bytes[index] = string.char(value % 256); value = math.floor(value / 256) end
+    return table.concat(bytes)
+  end
+  local data = text .. '\128' .. string.rep('\0', (55 - #text) % 64)
+    .. little(#text * 8) .. little(math.floor(#text / 536870912))
+  local state = { 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476 }
+  local shifts = { { 7, 12, 17, 22 }, { 5, 9, 14, 20 }, { 4, 11, 16, 23 }, { 6, 10, 15, 21 } }
+  for offset = 1, #data, 64 do
+    local words = {}
+    for index = 0, 15 do
+      local a, b, c, d = data:byte(offset + index * 4, offset + index * 4 + 3)
+      words[index] = a + b * 256 + c * 65536 + d * 16777216
+    end
+    local a, b, c, d = unpack(state)
+    for index = 0, 63 do
+      local f, g
+      if index < 16 then f, g = bit.bor(bit.band(b, c), bit.band(bit.bnot(b), d)), index
+      elseif index < 32 then f, g = bit.bor(bit.band(d, b), bit.band(bit.bnot(d), c)), (5 * index + 1) % 16
+      elseif index < 48 then f, g = bit.bxor(b, c, d), (3 * index + 5) % 16
+      else f, g = bit.bxor(c, bit.bor(b, bit.bnot(d))), (7 * index) % 16 end
+      local constant = math.floor(math.abs(math.sin(index + 1)) * 4294967296)
+      local rotated = bit.rol(bit.tobit(a + f + constant + words[g]), shifts[math.floor(index / 16) + 1][index % 4 + 1])
+      a, b, c, d = d, bit.tobit(b + rotated), b, c
+    end
+    state = { bit.tobit(state[1] + a), bit.tobit(state[2] + b), bit.tobit(state[3] + c), bit.tobit(state[4] + d) }
+  end
+  local digest = {}
+  for _, word in ipairs(state) do digest[#digest + 1] = little(word % 4294967296) end
+  return table.concat(digest)
+end
+
+function M.git_author(author)
+  if not author then return 'Normal' end
+  if not author_colors[author] then
+    local digest = md5_bytes(author)
+    local function fraction(offset)
+      local sum = 0
+      for index = offset, offset + 3 do sum = sum + digest:byte(index) end
+      return (sum % 100) / 100
+    end
+    local hue, saturation, lightness = fraction(1) * 360 / 360, 0.6 + 0.4 * fraction(5), 0.4 + 0.2 * fraction(9)
+    local upper = lightness < 0.5 and lightness * (1 + saturation) or lightness + saturation - lightness * saturation
+    local lower = 2 * lightness - upper
+    local function channel(value)
+      if value < 0 then value = value + 1 elseif value > 1 then value = value - 1 end
+      local result
+      if 6 * value < 1 then result = lower + (upper - lower) * 6 * value
+      elseif 2 * value < 1 then result = upper
+      elseif 3 * value < 2 then result = lower + (upper - lower) * (2 / 3 - value) * 6
+      else result = lower end
+      return math.floor(result * 255)
+    end
+    local color = string.format('#%02x%02x%02x', channel(hue + 1 / 3), channel(hue), channel(hue - 1 / 3))
+    local group = 'DesktopGitAuthor' .. vim.fn.sha256(author):sub(1, 16)
+    author_colors[author] = { group = group, reference = color, color = terminal_author_color(color) }
+    api.nvim_set_hl(0, group, { fg = author_colors[author].color })
+  end
+  return author_colors[author].group
+end
+
 function M.repository_color(name)
   if name == '' then return M.palette.status_green end
   -- Independent parts of a stable hash choose hue, saturation and lightness.
@@ -81,6 +193,7 @@ function M.highlights()
     WinBar = { fg = p.vscFront, bg = p.ui_background, bold = true },
     WinBarNC = { fg = p.vscFront, bg = p.ui_background },
     DesktopRepositoryName = repository_highlight(),
+    DesktopCommitGraphSelected = { fg = p.vscFront, bold = true },
     TabLine = { fg = p.vscFront, bg = p.ui_bar_background },
     TabLineFill = { link = 'TabLine' },
     TabLineSel = { fg = p.vscFront, bg = p.ui_background, bold = true },
@@ -238,6 +351,11 @@ end
 
 function M.apply()
   for name, definition in pairs(M.highlights()) do api.nvim_set_hl(0, name, definition) end
+  author_candidates = nil
+  for _, author in pairs(author_colors) do
+    author.color = terminal_author_color(author.reference)
+    api.nvim_set_hl(0, author.group, { fg = author.color })
+  end
   -- ANSI colors are independent of syntax colors (e.g. green strings and gray comments).
   for index = 0, 15 do vim.g['terminal_color_' .. index] = M.palette['terminal_' .. index] end
 end
