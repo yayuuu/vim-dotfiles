@@ -529,51 +529,10 @@ function M.popup(items, statusline, opts)
   vim.api.nvim_win_set_config(win, config)
   -- An action closes the popup on press. Consume the matching release so
   -- it cannot open the tree row or select code underneath the vanished menu.
-  local pressed, closed = false, false
-  local position = vim.api.nvim_win_get_position(win)
-  local height, width = vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win)
-  local presses, releases = {}, {}
-  for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
-    presses[vim.keycode("<" .. prefix .. "LeftMouse>")] = true
-    releases[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
-  end
-  vim.on_key(function(key, typed)
-    if require("config.mouse_capture").blocked(key, typed) then return end
-    if presses[typed] or presses[key] then
-      -- A release may be lost outside the host. A fresh press starts a new
-      -- gesture, and a closed popup must never capture its old screen area.
-      pressed, M.menu_mouse_pending = false, false
-      if closed then
-        if M.popup_buffer == buf then M.popup_buffer, M.menu_name = nil, nil end
-        vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
-        return
-      end
-      local mouse = vim.fn.getmousepos()
-      -- Volt may have already closed the popup in its own on_key listener.
-      -- Screen coordinates still identify the press after its window is gone.
-      if mouse.screenrow >= position[1] and mouse.screenrow <= position[1] + height + 2
-        and mouse.screencol >= position[2] and mouse.screencol <= position[2] + width + 2 then
-        pressed, M.menu_mouse_pending = true, true
-      end
-    elseif (releases[typed] or releases[key]) and pressed then
-      pressed = false
-      -- Buffer-local release mappings may have run before on_key. They also
-      -- check this flag; clear it after the entire input event has finished.
-      vim.schedule(function() M.menu_mouse_pending = false end)
-      vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
-      return ""
-    end
-  end, vim.api.nvim_create_namespace("DesktopMenuRelease"))
+  local close_mouse = require("config.menu_mouse").attach(win, buf)
   vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(win), once = true, callback = function()
     vim.schedule(function()
-      closed = true
-      if M.popup_buffer == buf then M.menu_name = nil; vim.cmd("redrawtabline") end
-      -- Keyboard dismissal must not leave a mouse listener over the old popup.
-      -- A mouse action keeps it only until the matching release arrives.
-      if not pressed and M.popup_buffer == buf then
-        M.popup_buffer, M.menu_name = nil, nil
-        vim.on_key(nil, vim.api.nvim_create_namespace("DesktopMenuRelease"))
-      end
+      close_mouse()
       if opts.on_close then opts.on_close(action_requested) end
     end)
   end })

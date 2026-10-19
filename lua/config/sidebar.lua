@@ -100,72 +100,74 @@ local function lines(buf, text)
   vim.bo[buf].modifiable = false
 end
 
--- Connections are north/east/south/west bits. Diagonals become three-cell
--- rounded turns, combining with vertical lanes instead of overwriting them.
-local graph_symbols = { [1] = "│", [2] = "─", [3] = "╰", [4] = "│", [5] = "│", [6] = "╭", [7] = "├",
-  [8] = "─", [9] = "╯", [10] = "─", [11] = "┴", [12] = "╮", [13] = "┤", [14] = "┬", [15] = "┼" }
-local function graph_prefix(text)
-  return (text:gsub("^([ *|/\\_%-]+)", function(prefix)
-    local connections, nodes, width = {}, {}, #prefix
-    local function connect(column, mask)
-      if column < 1 then return end
-      connections[column] = bit.bor(connections[column] or 0, mask)
-      width = math.max(width, column)
-    end
-    for column = 1, #prefix do
-      local char = prefix:sub(column, column)
-      if char == "*" then nodes[column] = true
-      elseif char == "|" then connect(column, 5)
-      elseif char == "-" or char == "_" then connect(column, 10)
-      elseif char == "\\" then
-        connect(column - 1, 3); connect(column, 10); connect(column + 1, 12)
-      elseif char == "/" then
-        connect(column - 1, 6); connect(column, 10); connect(column + 1, 9)
+-- One row per commit, using LazyGit's parent-based lane routing and colors.
+function M.paint_history()
+  if not valid(M.history_win) or not M.history_rows or not api.nvim_buf_is_valid(M.history_buf) then return end
+  local graph = require("config.git_graph")
+  local selected
+  if api.nvim_get_current_win() == M.history_win then
+    local item = M.history_rows[api.nvim_win_get_cursor(M.history_win)[1]]
+    selected = item and item.commit
+  end
+  local text, spans = {}, {}
+  for row, item in ipairs(M.history_rows) do
+    local chunks = graph.render(M.history_pipes[row], selected, row > 1 and M.history_rows[row - 1].commit or nil)
+    local parts, marks, column = { " " }, {}, 1
+    for _, chunk in ipairs(chunks) do
+      parts[#parts + 1] = chunk[1]
+      if chunk[2] and chunk[1] ~= " " then
+        marks[#marks + 1] = { column, column + #chunk[1], chunk[2] }
       end
+      column = column + #chunk[1]
     end
-    local cells = {}
-    for column = 1, width do
-      cells[column] = nodes[column] and "●" or graph_symbols[connections[column]] or " "
+    parts[#parts + 1] = item.short .. item.refs .. " " .. item.msg
+    marks[#marks + 1] = { column, column + #item.short, "Constant" }
+    local head = item.refs:find("HEAD", 1, true)
+    if head then marks[#marks + 1] = { column + #item.short + head - 1, column + #item.short + head + 3, "String" } end
+    text[row], spans[row] = table.concat(parts), marks
+  end
+  if not vim.deep_equal(M.history_text, text) then lines(M.history_buf, text); M.history_text = text end
+  local ns = api.nvim_create_namespace("DesktopCommitGraph")
+  api.nvim_buf_clear_namespace(M.history_buf, ns, 0, -1)
+  for row, marks in ipairs(spans) do
+    for _, mark in ipairs(marks) do
+      api.nvim_buf_set_extmark(M.history_buf, ns, row - 1, mark[1], { end_col = mark[2], hl_group = mark[3] })
     end
-    return table.concat(cells)
-  end))
+  end
 end
 
 function M.refresh_history()
   local state = M.state()
   if not state or state.name ~= "git_status" or not valid(M.history_win) then return end
+  if not vim.b[M.history_buf].ide_commit_graph_tracking then
+    vim.b[M.history_buf].ide_commit_graph_tracking = true
+    api.nvim_create_autocmd({ "CursorMoved", "WinEnter", "WinLeave" }, { buffer = M.history_buf, callback = function()
+      if M.history_paint_pending then return end
+      M.history_paint_pending = true
+      vim.schedule(function() M.history_paint_pending = false; M.paint_history() end)
+    end })
+  end
   M.history_generation = M.history_generation + 1
   local generation, root, buf = M.history_generation, require("config.ide").root(), M.history_buf
-  vim.system({ "git", "-C", root, "log", "--graph", "--topo-order", "--color=never", "--decorate=short",
-    "--format=%h%x09%d%x09%s%x09%H", "-n", "300", "HEAD", "--" }, { text = true }, function(result)
+  vim.system({ "git", "-C", root, "log", "--topo-order", "--color=never", "--decorate=short",
+    "--format=%H%x00%P%x00%an%x00%h%x00%d%x00%s", "-n", "300", "HEAD", "--" }, { text = true }, function(result)
     vim.schedule(function()
       if generation ~= M.history_generation or not api.nvim_buf_is_valid(buf)
         or root ~= require("config.ide").root() then return end
-      local text, commits = {}, {}
+      local commits = {}
       if result.code == 0 then
-        for _, row in ipairs(vim.split(vim.trim(result.stdout), "\n", { plain = true, trimempty = true })) do
-          local prefix, refs, subject, hash = row:match("^(.-)\t(.-)\t(.-)\t(%x+)$")
-          text[#text + 1] = prefix and (graph_prefix(prefix) .. refs .. " " .. subject) or graph_prefix(row)
-          if hash then commits[#text] = { commit = hash, text = subject, msg = subject, root = root } end
+        for _, row in ipairs(vim.split(result.stdout, "\n", { plain = true, trimempty = true })) do
+          local fields = vim.split(row, "\0", { plain = true })
+          if #fields == 6 then
+            commits[#commits + 1] = { commit = fields[1], parents = vim.split(fields[2], " ", { trimempty = true }),
+              author = fields[3], short = fields[4], refs = fields[5], text = fields[6], msg = fields[6], root = root }
+          end
         end
-      else
-        local repo = (result.stderr or ""):find("not a git repository", 1, true)
-        text = { repo and "Not a Git repository" or "No commits yet" }
       end
-      if #text == 0 then text = { "No commits yet" } end
-      for row, value in ipairs(text) do text[row] = " " .. value end
-      lines(buf, text)
-      M.commits = commits
-      local ns = api.nvim_create_namespace("DesktopCommitGraph")
-      api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-      for row, commit in pairs(commits) do
-        local first, last = text[row]:find("%x%x%x%x%x%x%x+")
-        if first then api.nvim_buf_set_extmark(buf, ns, row - 1, first - 1,
-          { end_col = last, hl_group = "Constant" }) end
-        local head = text[row]:find("HEAD", 1, true)
-        if head then api.nvim_buf_set_extmark(buf, ns, row - 1, head - 1,
-          { end_col = head + 3, hl_group = "String" }) end
-      end
+      M.commits, M.history_rows, M.history_text = commits, commits, nil
+      M.history_pipes = require("config.git_graph").build(commits)
+      if #commits > 0 then M.paint_history()
+      else lines(buf, { result.code == 0 and " No commits yet" or " Cannot load commit history" }) end
     end)
   end)
 end
@@ -197,7 +199,7 @@ local function history(tree)
   M.history_win, M.history_buf = list_window("ide_git_history",
     "%#NeoTreeRootName# Commits · HEAD%=%#NeoTreeTabActive#%@v:lua.DesktopGitHistoryRefresh@[⟳]%T", tree)
   local buf = M.history_buf
-  M.commits = {}
+  M.commits, M.history_rows, M.history_text = {}, nil, nil
   local function open() M.open_commit() end
   vim.keymap.set("n", "<Left>", "<Nop>", { buffer = buf })
   vim.keymap.set("n", "<Right>", "<Nop>", { buffer = buf })

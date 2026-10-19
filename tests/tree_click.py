@@ -79,7 +79,15 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-click-') as directory:
         # A menu action closes on press. If the host loses its release, the
         # next independent click must not inherit the old menu's click guard.
         editor.lua('_G.tree_menu_action=false;require("config.ide").popup({'
-                   '{name="Test action",cmd=function() _G.tree_menu_action=true end}})')
+                   '{name="Test action",cmd=function() _G.tree_menu_action=true end},'
+                   '{name="separator"}})')
+        # A release inside a still-open popup must not detach recovery for
+        # its next gesture. Separators keep the menu open without an action.
+        separator = editor.lua('local b=require("menu.state").bufids[1];'
+                               'local p=vim.fn.screenpos(vim.fn.bufwinid(b),2,4);return {p.row-1,p.col-1}')
+        editor.click(*separator)
+        assert editor.lua('return #require("menu.state").bufids') == 1
+        assert not editor.lua('return _G.tree_menu_action or require("config.ide").menu_mouse_pending')
         editor.lua('vim.cmd("redraw!")')
         pos = next((row, ''.join(cells).index('Test action') + 2)
                    for row, cells in enumerate(editor.grid) if 'Test action' in ''.join(cells))
@@ -89,9 +97,16 @@ with tempfile.TemporaryDirectory(prefix='nvim-tree-click-') as directory:
         click(second)
         assert not editor.lua('return require("config.ide").menu_mouse_pending'), 'New click clears the closed menu guard'
         click(first)
+        # Reproduce the live failure: the popup is gone and its release
+        # listener was detached, but the shared guard still blocks Files.
+        editor.lua('require("config.ide").menu_mouse_pending=true;'
+                   'vim.on_key(nil,vim.api.nvim_create_namespace("DesktopMenuRelease"))')
+        click(second)
+        assert not editor.lua('return require("config.ide").menu_mouse_pending'), 'Orphaned menu guard recovers'
+        click(first)
         assert editor.call('nvim_buf_get_lines', firstbuf, 0, 1, False) == ['Unsaved document']
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
-        print('PASS: tree clicks open the pointed file from Normal/Insert/Visual/Select/terminal and repeated clicks; missing horizontal/vertical releases recover without losing unsaved edits.')
+        print('PASS: tree clicks across modes and repeated clicks; lost scrollbar/menu releases, separator clicks and orphaned menu guards recover without losing unsaved edits.')
     except Exception:
         print(editor.lua('return vim.fn.execute("messages")'))
         print(editor.lua('return vim.inspect({mouse=vim.fn.getmousepos(),pending=require("config.ide").menu_mouse_pending,'
