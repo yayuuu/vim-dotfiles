@@ -178,6 +178,11 @@ You can also run `:GitMerge branch-name` or choose Git > Merge branch in the men
 
 Left-click expands or collapses an object. Click a breakpoint or stack frame to open
 its source; right-click provides actions appropriate to the selected item.
+Click anywhere in a row to activate it. Debug lists use Normal mode with a hidden
+caret and full-row selection: Up/Down selects a row and Enter activates it.
+The last row in Watches accepts a new expression in Insert mode. Down from the
+list enters it; Up returns to the list. Esc keeps this input ready for typing,
+and Enter adds the expression. Background refreshes preserve unfinished input.
 Debug console opens the debugger console.
 Click its body to type at the `dap>` prompt, then press Enter to evaluate.
 PHP expressions run while the script is paused at a breakpoint, in the selected

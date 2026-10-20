@@ -128,6 +128,7 @@ function M.refresh_breakpoints()
 end
 
 function M.setup(dap)
+  require("config.debugger_navigation").setup()
   require("config.debugger_mouse").setup()
   require("config.debugger_inspect").setup(dap)
   dap.listeners.after.event_initialized["dapui_config"] = function() vim.schedule(M.show) end

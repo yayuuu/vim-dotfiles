@@ -1,12 +1,9 @@
 -- Mouse actions use DAP UI's buffer mappings and DAP's variable metadata.
 local M = {}
 local api = vim.api
-local types = { dapui_scopes = true, dapui_breakpoints = true, dapui_stacks = true, dapui_watches = true }
 local namespace = api.nvim_create_namespace("DesktopDebuggerMouse")
-local function valid(win) return win and win ~= 0 and api.nvim_win_is_valid(win) end
 function M.handles(win)
-  return valid(win) and api.nvim_win_get_config(win).relative == ""
-    and types[vim.bo[api.nvim_win_get_buf(win)].filetype] == true
+  return require("config.debugger_navigation").handles(win)
 end
 
 local function row_info(buf, row)
@@ -18,7 +15,9 @@ local function row_info(buf, row)
       local details = mark[4]
       if details.hl_group and details.end_col then
         info.groups[details.hl_group] = text:sub(mark[3] + 1, details.end_col)
-        if details.hl_group == "DapUIVariable" then info.indent = math.max(0, mark[3] - 2) end
+        if details.hl_group == "DapUIVariable" then
+          info.indent = math.max(0, vim.fn.strdisplaywidth(text:sub(1, mark[3])) - 2)
+        end
       end
     end
   end
@@ -30,9 +29,12 @@ local function select_row(win, row)
   if not M.handles(win) or row < 1 then return false end
   local buf = api.nvim_win_get_buf(win)
   if row > api.nvim_buf_line_count(buf) then return false end
-  vim.cmd("stopinsert")
-  api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
   api.nvim_set_current_win(win)
+  local mode = vim.fn.mode()
+  if mode:match("^i") then vim.cmd("stopinsert")
+  elseif mode:match("^[vVsS]") or mode == "\22" or mode == "\19" then
+    vim.cmd.normal({ args = { vim.keycode("<Esc>") }, bang = true })
+  end
   local view = vim.fn.winsaveview()
   api.nvim_win_set_cursor(win, { row, 0 })
   if view.leftcol > 0 then require("config.hscroll").set(win, view.leftcol) end
@@ -41,6 +43,8 @@ end
 
 function M.action(win, row, action)
   if not select_row(win, row) then return end
+  local navigation, buf = require("config.debugger_navigation"), api.nvim_win_get_buf(win)
+  if navigation.rows[buf] then navigation.action(buf, row, action); return end
   for _, mapping in ipairs(api.nvim_buf_get_keymap(api.nvim_win_get_buf(win), "n")) do
     if mapping.desc == action and mapping.callback then mapping.callback(row); return end
   end
@@ -79,10 +83,10 @@ function M.click(win, row)
   elseif ft == "dapui_breakpoints" then
     if info.groups.DapUIBreakpointsPath then M.toggle_group(win, row, "DapUIBreakpointsPath")
     elseif vim.trim(info.text) ~= "" then M.action(win, row, "open") end
-  elseif ft == "dapui_watches" and info.text:match("^>%s*$") then
+  elseif require("config.debugger_navigation").is_input(win, row) then
     api.nvim_win_set_cursor(win, { row, #info.text })
-    vim.cmd("startinsert")
-  elseif info.text:match("^%s*[v>] ") and not info.text:match("^%s*>%s*$") then
+    require("config.debugger_navigation").sync_mode()
+  else
     M.action(win, row, "expand")
   end
 end
@@ -94,9 +98,15 @@ function M.selection(win, row, callback)
   local info = row_info(buf, row)
   local result = { sentence = info.text, value = info.groups.DapUIValue or info.groups.DapUIModifiedValue }
   local function watch_expression(text)
+    local icons, body = require("dapui.config").icons
+    for _, icon in ipairs({ icons.collapsed, icons.expanded }) do
+      local prefix = icon .. " "
+      if vim.startswith(text, prefix) then body = text:sub(#prefix + 1); break end
+    end
+    if not body then return end
     for _, watch in ipairs(require("dapui").elements.watches.get()) do
-      local last = #watch.expression + 2
-      if text:sub(3, last) == watch.expression and text:sub(last + 1, last + 1):match("[ :]") then return watch.expression end
+      local last = #watch.expression
+      if body:sub(1, last) == watch.expression and body:sub(last + 1, last + 1):match("[ :]") then return watch.expression end
     end
   end
   if vim.bo[buf].filetype == "dapui_watches" and not info.name then
@@ -120,7 +130,7 @@ function M.selection(win, row, callback)
       table.insert(ancestry, 1, parent.name)
       indent = parent.indent
     elseif parent.groups.DapUIScope then scope = parent.groups.DapUIScope; break
-    elseif vim.bo[buf].filetype == "dapui_watches" and parent.text:match("^[v>] ") then
+    elseif vim.bo[buf].filetype == "dapui_watches" then
       expression = watch_expression(parent.text)
       if expression then break end
     end
@@ -164,6 +174,7 @@ local function with_selection(action)
 end
 
 function M.attach(buf)
+  require("config.debugger_navigation").attach(buf)
   local opts = { buffer = buf, silent = true }
   vim.keymap.set("n", "<C-c>", function() with_selection(function(item) copy(item.value or item.sentence) end) end,
     vim.tbl_extend("force", opts, { desc = "Copy debugger value" }))
@@ -232,20 +243,26 @@ function M.setup()
     for _, kind in ipairs({ "Mouse", "Drag", "Release" }) do keys[vim.keycode("<" .. prefix .. "Left" .. kind .. ">")] = kind end
   end
   local pressed
+  local capture = require("config.mouse_capture")
   vim.on_key(function(key, typed)
-    if require("config.mouse_capture").blocked(key, typed) then return end
     local kind = keys[typed] or keys[key]
     if not kind then return end
+    if kind == "Mouse" and pressed then capture.cancel(pressed); pressed = nil end
+    if capture.blocked(key, typed) and capture.owner ~= pressed then return end
     local mouse = vim.fn.getmousepos()
     if kind == "Release" and pressed then
       local start = pressed; pressed = nil
-      if require("config.panel_mouse").row(mouse, start.win) == start.row then vim.schedule(function() M.click(start.win, start.row) end) end
+      capture.release(start)
+      if not start.dragged and require("config.panel_mouse").row(mouse, start.win) == start.row then
+        vim.schedule(function() M.click(start.win, start.row) end)
+      end
       return ""
     end
-    if kind == "Drag" and pressed then pressed = nil; return "" end
+    if kind == "Drag" and pressed then pressed.dragged = true; return "" end
     if kind == "Mouse" and M.handles(mouse.winid) and require("config.panel_mouse").row(mouse)
       and not require("config.ide").menu_mouse_pending then
       pressed = { win = mouse.winid, row = mouse.line }
+      capture.claim(pressed)
       return ""
     end
   end, namespace)

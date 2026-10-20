@@ -30,6 +30,13 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-input-') as directory:
         editor.lua('require("config.terminals").new()')
         editor.wait(lambda: editor.lua('return vim.fn.mode()') == 't', 'New terminal starts input')
         command('new.txt')
+        # A native prompt may finish leaving Insert after WinEnter. Delayed
+        # terminal entry must still yield to an immediate, deliberate Esc Esc.
+        editor.lua('vim.api.nvim_set_current_win(require("config.ide").editor_window());'
+                   'vim.api.nvim_set_current_win(require("config.terminals").win)')
+        editor.call('nvim_input', '<Esc><Esc>')
+        editor.lua('vim.wait(80)')
+        assert editor.lua('return vim.fn.mode()') == 'n', 'Quick Esc Esc cancels pending terminal entry'
         editor.lua('vim.cmd("stopinsert");vim.api.nvim_set_current_win(require("config.ide").editor_window())')
         editor.wait(lambda: editor.lua('return vim.fn.mode()') != 't', 'Editor retains its own input mode')
         print('PASS: terminal accepts typed commands after mouse click, same-pane click after Esc Esc, keyboard focus, and New terminal.')

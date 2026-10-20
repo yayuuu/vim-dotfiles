@@ -441,6 +441,11 @@ or perform operations on the user's actual repositories independently.
 - The header shows the current program and directory, e.g. `bash - ~/project`,
   instead of a fixed Terminal label. Update it after `cd` and when a program starts.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
+  Returning from Watches or another native prompt must wait for Neovim's prompt
+  mode transition before resuming terminal input; a WinEnter callback alone can
+  run too early and leave the terminal in Normal, swallowing Enter. Preserve
+  scrollback and explicit Esc, Esc exits. Verify the actual CR byte in a child
+  PTY while the debugger is paused with `tests/debugger_navigation.py`.
   Keypad navigation with NumLock off must reach terminal programs as Home/End,
   arrows, PageUp/PageDown, Insert/Delete, preserving numeric keypad digit input.
   Esc, Esc exits input mode; clicking again resumes it. Preserve text selection.
@@ -501,8 +506,31 @@ or perform operations on the user's actual repositories independently.
   or continuing. Resolve PHP's leading `$`, property/array references and a
   simple identifier fallback when no parser is available. Do not include calls
   from a container's index expression.
+  The evaluation popup shares Scopes/Watches row navigation: Normal mode, hidden
+  caret, full-row highlight, Up/Down, Enter and row-wide clicks to expand/collapse.
+  Use the same expanders and Canvas action metadata, preserve Esc dismissal and
+  close stale popups on stepping/continuing. Verify with `tests/debugger_values.py`.
 - Left-click expands/collapses variables, Watches, and thread/breakpoint groups.
+  Debug expanders use `▸` when collapsed and `▾` when expanded, matching Files
+  when icons are enabled; the ASCII setting retains `>`/`v`. Watch-expression
+  lookup and variable indentation must account for multibyte glyphs rather than
+  assuming two prefix bytes. Keep the native Watches input prompt `> ` separate.
   Clicking a breakpoint or stack frame opens its source in the main editor.
+  The whole rendered row is actionable, including its value and empty space to
+  the right; preserve margins and scrollbar gestures. Own clicks through release,
+  cancel actions after drags, and recover from a missing release on a fresh press.
+  All four lists enter Normal mode from mouse or keyboard focus, hide the caret,
+  highlight the full content row, navigate with Up/Down and activate with Enter.
+  Watches' final native prompt row always enters Insert, including a click at
+  either end of the row or keyboard Down from the list. Esc keeps that row in
+  Insert; Up returns to the preceding list row in Normal. Enter submits through
+  the native prompt callback and leaves the next expression ready for input.
+  Preserve unfinished text and cursor across asynchronous DAP refreshes and
+  focus changes. Other rows remain noneditable, and blank space below the list
+  must not activate the prompt. Keep row actions and the local DAP UI Canvas
+  adapter in `debugger_navigation.lua`; recheck its `mappings` and `prompt` fields
+  after plugin updates. Do not infer actions from rendered arrow/text patterns
+  or drain queued input through feedkeys with the x flag when selecting a row.
 - Each section has a context menu with appropriate actions and shortcuts. Variables:
   expand/collapse, Add to watches, Copy value, Copy expression, Copy sentence
   (the entire line), Edit value, Evaluate in debug console. Watches: add,
@@ -755,6 +783,7 @@ or perform operations on the user's actual repositories independently.
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `terminal_mouse.lua` | Child mouse-reporting requests observed from terminal output |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
+| `debugger_navigation.lua` | DAP row actions, list/input modes, preserved Watches drafts and local Canvas adapter |
 | `debugger_inspect.lua` | On-demand variable popup, expression lookup, and Ctrl+click capture |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
@@ -864,6 +893,7 @@ Run a single scenario:
   Files following/revealing diff documents → `diff_files_tree.py`.
   Minimap gestures and immediate viewport updates → `minimap_drag.py`.
   Minimap/horizontal drag releases over other controls → `scroll_drag_capture.py`.
+  Debug row actions/modes, Watches prompt/drafts, Alt+A entry and paused-session terminal Enter → `debugger_navigation.py`.
 - Check visible behavior and actual gestures. For regressions, consider a test
   that fails before the fix. Documentation-only changes do not require the full UI suite.
   Run `git diff --check`.

@@ -255,7 +255,8 @@ return {
     opts.expand_lines = false
     opts.floating = { border = "rounded", max_width = 80, max_height = 20 }
     opts.select_window = function() return require("config.ide").editor_window() end
-    opts.icons = { expanded = "v", collapsed = ">", current_frame = ">" }
+    opts.icons = { expanded = use_icons and "▾" or "v", collapsed = use_icons and "▸" or ">",
+      current_frame = use_icons and "▸" or ">" }
     opts.controls = { enabled = true, icons = { pause = "||", play = ">", step_into = "v", step_over = ">|", step_out = "^", step_back = "<", run_last = "R", terminate = "X", disconnect = "D" } }
     opts.layouts = {}
   end, config = function(_, opts)

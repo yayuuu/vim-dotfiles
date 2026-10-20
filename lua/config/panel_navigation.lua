@@ -313,14 +313,16 @@ end
 local function panel_mode()
   if M.state then return end
   local ft = vim.bo.filetype
+  local debug = package.loaded["config.debugger_navigation"]
+  local debug_list = debug and debug.handles(api.nvim_get_current_win()) and not debug.is_input(api.nvim_get_current_win())
   local source = ft == "neo-tree" and require("neo-tree.sources.manager").get_state_for_window(api.nvim_get_current_win())
-  if ft == "aerial" or ft == "ide_terminal_list" or ft == "ide_git_history"
+  if debug_list or ft == "aerial" or ft == "ide_terminal_list" or ft == "ide_git_history"
     or (source and (source.name == "filesystem" or source.name == "git_status" or source.name == "search")) then
     if not M.panel_guicursor then M.panel_guicursor = vim.o.guicursor end
     vim.o.guicursor = panel_cursor
     vim.wo.cursorline = true
     vim.wo.cursorlineopt = "both"
-    if (ft == "aerial" or ft == "ide_terminal_list" or ft == "ide_git_history")
+    if (debug_list or ft == "aerial" or ft == "ide_terminal_list" or ft == "ide_git_history")
       and not vim.wo.winhighlight:find("CursorLine:", 1, true) then
       vim.wo.winhighlight = vim.wo.winhighlight .. ",CursorLine:NeoTreeCursorLine"
     end
