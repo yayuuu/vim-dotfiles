@@ -175,13 +175,7 @@ end
 function M.open_commit(row)
   vim.cmd("stopinsert")
   local item = type(row) == "table" and row or M.commits and M.commits[row or api.nvim_win_get_cursor(M.history_win)[1]]
-  if item then Snacks.picker({ title = "Commit " .. item.commit:sub(1, 8), cwd = item.root,
-    items = { item }, format = "git_log", preview = "git_show", main = { current = true },
-    on_change = function(picker)
-      if picker.preview.win:valid() then require("config.vscroll").attach(picker.preview.win.win) end
-    end,
-    on_close = function(picker) require("config.vscroll").detach(picker.preview.win.win) end,
-    confirm = function(picker) picker:close() end }) end
+  if item then return require("config.commit_preview").open(item) end
 end
 
 function M.history_menu(row)

@@ -618,6 +618,20 @@ or perform operations on the user's actual repositories independently.
 - Clicking a commit in the sidebar graph opens its message and patch in a picker.
   Custom items using Snacks' `git_log` formatter must provide `msg` as well as
   `commit` and searchable `text`; closing the picker preserves panels and unsaved edits.
+  Load commit metadata and blob sizes asynchronously before requesting patches.
+  Files with more than 800 changed lines or 128 KiB of old/new blob data start
+  collapsed, including deleted and minified files; binary files do too. Bound
+  automatic loading across the commit (256 KiB, 4000 changed lines, 40 files).
+  Click a file header or use Enter/Space in the preview to load/collapse that
+  file. Explicit expansion still bounds displayed patch bytes and line lengths,
+  with visible truncation labels. Merge previews compare against the first parent;
+  rename paths may appear as deletion/addition. Keep this in `commit_preview.lua`.
+  Esc and q close from the input, list or preview, including Insert mode;
+  × uses the picker's public close action. Cancel pending Git jobs and ignore
+  late results without replaying keys into Git Status. Preserve window IDs,
+  geometry, document contents and terminal sessions through every close path.
+  Verify small/large patches, delayed jobs, all close actions and unchanged
+  layouts with `tests/git_commit_preview.py` and `tests/commit_preview_large.py`.
 - Long commit previews have a vertical scrollbar on the right preview border.
   Support track clicks, thumb dragging, and the wheel without stealing input focus.
   Measure screen lines, including wrapped text and virtual lines; follow scrolling
@@ -641,6 +655,14 @@ or perform operations on the user's actual repositories independently.
   Shift+click selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
   in Staged Changes.
+  Shift+Up/Down and Shift+PageUp/PageDown extend or contract a range from its
+  anchor, skip headings, scroll it into view and stay in Normal mode. Space
+  toggles the focused file without opening its diff; plain arrows preserve
+  selections built with Space or Ctrl+A so separate files can be marked.
+  Ctrl+A selects only files in the focused Changes or Staged Changes section,
+  including when its heading is focused. Shift+F10 preserves a selected row's
+  range; Stage/Unstage/Discard use all selected files in the matching section.
+  Cover keyboard selection and real index changes in `tests/git_keyboard_selection.py`.
 - Git Status and Commits use Normal mode, a hidden caret and full-row selection.
   Up/Down in Git Status moves only the current-row highlight, clearing earlier
   mouse selections without creating a Visual selection; retain Shift/Ctrl mouse

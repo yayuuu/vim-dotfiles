@@ -141,6 +141,15 @@ use `Copy (2) of name`, etc. Existing files are preserved.
 R / F5 in the Git panel refreshes the status. Shift+click selects a range of files,
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard
 and Commit are available in the Git panel and its menu. Discard requires confirmation.
+Shift+Up/Down or Shift+PageUp/PageDown extends or contracts a range of files.
+Space toggles one file; arrows preserve selections built with Space or Ctrl+A.
+Ctrl+A selects all files in the Changes or Staged Changes section under the cursor.
+Shift+F10 opens the context menu; Stage / Unstage / Discard acts on all selected
+files in the corresponding section.
+Click a commit to preview its message and changes. Large/minified files start
+collapsed; click their header or use Enter/Space in the preview to expand them.
+Very large previews show a labeled excerpt. Esc, q or × closes the whole preview
+and keeps the Git panels open, including while changes are loading.
 Git Status and Commits highlight whole rows in Normal mode. Shift+F10 opens the
 selected item's context menu. Up at the start of Git Status enters Commit message;
 Down from that input returns to the status list. The input is also available
