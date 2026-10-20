@@ -653,6 +653,20 @@ function M.outline()
   if M.is_tool_tab() then return end
   if not require("config.sidebar").symbols_enabled() then return end
   if M.outline_busy or #vim.api.nvim_list_uis() == 0 then return end
+  local mode = vim.fn.mode()
+  if mode == "v" or mode == "V" or mode == "\22" or mode == "s" or mode == "S" or mode == "\19" then
+    -- Our Aerial adapter defers buffer replacement while selecting. Defer the
+    -- split as well, otherwise its empty placeholder survives source switches
+    -- and a later Files visit creates a second Symbols window above it.
+    if not M.outline_pending then
+      M.outline_pending = true
+      vim.api.nvim_create_autocmd("ModeChanged", { once = true, callback = function()
+        M.outline_pending = false
+        vim.schedule(M.outline)
+      end })
+    end
+    return
+  end
   local previous = vim.api.nvim_get_current_win()
   local editor = M.editor_window()
   local tree

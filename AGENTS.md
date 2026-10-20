@@ -148,6 +148,11 @@ or perform operations on the user's actual repositories independently.
   Menu mouse/Enter actions close through the existing close callback; scope our
   Volt.close adapter to our own popup rather than feeding q into a nested input
   loop. The construction/geometry regression is `tests/ui_stability.py`.
+  While an editor selection is active, defer the entire Symbols construction,
+  including its split, until selection ends. Recheck the active sidebar source
+  before opening it; never leave an anonymous placeholder behind when Aerial
+  defers binding. Verify hidden terminals and all six Visual/Select modes with
+  `tests/sidebar_selection.py`.
 
 ## Tabs above the editor
 
