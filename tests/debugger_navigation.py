@@ -153,7 +153,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-debug-navigation-') as directory:
         key('<M-a>', 't')
         editor.lua('local n=require("config.panel_navigation");n.state.target=...;n.show()', scopes)
         key('<CR>', 'n')
-        key('<M-a><M-a>', 'n')
+        key('<M-a>', 'n')
         editor.lua('local n=require("config.panel_navigation");n.state.target=...;n.show()', watches)
         key('<CR>', 'i')
         assert lines(watches)[-1] == '> unsubmitted'

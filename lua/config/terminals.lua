@@ -36,6 +36,78 @@ function M.mouse_enabled(buf)
     if item.buf == buf then return item.mouse.enabled end
   end
 end
+
+local function terminal_panel()
+  local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+  return win == M.win and vim.bo[buf].buftype == "terminal" and M.mouse_enabled(buf) ~= nil
+end
+
+function M.mode_label(mode)
+  if mode == "NORMAL" and terminal_panel() then return "TERMINAL" end
+  return mode
+end
+
+function M.begin_history(win)
+  if not valid(win) then return end
+  local buf = api.nvim_win_get_buf(win)
+  if win ~= M.win or M.mouse_enabled(buf) == nil then return end
+  input_generation = input_generation + 1
+  M.history = { win = win, buf = buf }
+end
+
+local function attach_terminal(buf)
+  -- These native escape sequences are for editing terminal scrollback. They
+  -- must not expose Normal commands to a user typing into the terminal panel.
+  for _, key in ipairs({ "<C-\\><C-n>", "<C-\\><C-o>" }) do
+    vim.keymap.set("t", key, "<Nop>", { buffer = buf, desc = "Keep terminal input" })
+  end
+  local keys = {}
+  for code = 32, 126 do keys[#keys + 1] = code == 60 and "<lt>" or string.char(code) end
+  for code = string.byte("a"), string.byte("z") do
+    keys[#keys + 1] = "<C-" .. string.char(code) .. ">"
+    local key = "<M-" .. string.char(code) .. ">"
+    if key ~= "<M-a>" and key ~= "<M-t>" then keys[#keys + 1] = key end
+  end
+  for _, key in ipairs({ "<BS>", "<Del>", "<CR>", "<Tab>", "<S-Tab>", "<Insert>", "<S-Insert>",
+    "<Up>", "<Down>", "<Left>", "<Right>", "<Home>", "<End>", "<PageUp>", "<PageDown>" }) do
+    keys[#keys + 1] = key
+  end
+  for _, key in ipairs({ "<Up>", "<Down>", "<Left>", "<Right>", "<Home>", "<End>", "<PageUp>", "<PageDown>" }) do
+    keys[#keys + 1] = "<C-" .. key:sub(2)
+    keys[#keys + 1] = "<S-" .. key:sub(2)
+  end
+  for number = 1, 24 do
+    if number ~= 4 then keys[#keys + 1] = "<F" .. number .. ">" end
+    keys[#keys + 1] = "<S-F" .. number .. ">"
+    keys[#keys + 1] = "<C-F" .. number .. ">"
+  end
+  vim.list_extend(keys, { "<C-Tab>", "<C-S-Tab>", "<C-Space>" })
+  for _, key in ipairs(keys) do
+    local encoded = vim.keycode(key)
+    vim.keymap.set("n", key, function()
+      M.history = nil
+      -- Native terminal i enters input before the key is handled. Do not use
+      -- a scheduled feed: queued text/Enter must never run Normal commands.
+      return "i" .. encoded
+    end, { buffer = buf, expr = true, replace_keycodes = false, desc = "Type into terminal" })
+  end
+  for _, key in ipairs({ "Home", "End", "Up", "Down", "Left", "Right", "PageUp", "PageDown", "Insert", "Del",
+    "Enter", "Plus", "Minus", "Multiply", "Divide", "Point", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" }) do
+    local encoded = vim.keycode("<k" .. key .. ">")
+    if key:match("^%d$") then encoded = key
+    elseif key == "Enter" then encoded = vim.keycode("<CR>")
+    elseif not vim.tbl_contains({ "Plus", "Minus", "Multiply", "Divide", "Point" }, key) then encoded = vim.keycode("<" .. key .. ">") end
+    vim.keymap.set("n", "<k" .. key .. ">", function()
+      M.history = nil
+      return "i" .. encoded
+    end, { buffer = buf, expr = true, replace_keycodes = false, desc = "Type into terminal" })
+  end
+  vim.keymap.set("n", "<Esc>", function()
+    M.history = nil
+    return "i"
+  end, { buffer = buf, expr = true, desc = "Resume terminal input" })
+end
+
 local function resume_input()
   local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
   if M.menu_context and M.menu_context.win == win and M.menu_context.buf == buf then return end
@@ -54,6 +126,15 @@ local function resume_input()
       if console then console_input(win, buf) else vim.cmd("startinsert") end
     end
   end, 20)
+end
+
+local function keep_terminal_input()
+  if not terminal_panel() or M.mouse_down or require("config.mouse_capture").active() then return end
+  local navigation = package.loaded["config.panel_navigation"]
+  if navigation and (navigation.state or navigation.closing) then return end
+  local history = M.history
+  if history and history.win == M.win and history.buf == api.nvim_get_current_buf() then return end
+  resume_input()
 end
 
 function M.context_menu(mouse, terminal_input)
@@ -265,7 +346,7 @@ function M.new(opts)
   end)
   if item.job <= 0 then M.close(item.buf); vim.notify("Could not start terminal", vim.log.levels.ERROR); return end
   M.show(item.buf, opts.start_insert ~= false)
-  vim.keymap.set("n", "q", M.hide, { buffer = item.buf, desc = "Hide terminal panel" })
+  attach_terminal(item.buf)
   return item.buf
 end
 
@@ -304,6 +385,10 @@ end
 function M.setup()
   local group = api.nvim_create_augroup("DesktopTerminals", { clear = true })
   api.nvim_create_autocmd("WinEnter", { group = group, callback = resume_input })
+  api.nvim_create_autocmd("ModeChanged", { group = group, callback = keep_terminal_input })
+  api.nvim_create_autocmd("TermEnter", { group = group, callback = function()
+    if terminal_panel() then M.history = nil end
+  end })
   api.nvim_create_autocmd("WinLeave", { group = group, callback = function() input_generation = input_generation + 1 end })
   if M.title_timer then M.title_timer:stop(); M.title_timer:close() end
   M.title_timer = vim.uv.new_timer()
@@ -317,21 +402,26 @@ function M.setup()
     vim.schedule(function() M.close(event.buf) end)
   end })
   local keys = {}
-  local cancel_input = { [vim.keycode("<C-\\>")] = true }
-  for _, direction in ipairs({ "Up", "Down", "Left", "Right" }) do cancel_input[vim.keycode("<ScrollWheel" .. direction .. ">")] = true end
   for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
     keys[vim.keycode("<" .. prefix .. "LeftMouse>")] = false
     keys[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
   end
   vim.on_key(function(key, typed)
-    -- A deliberate terminal escape or scrollback gesture cancels a pending
-    -- focus request, including one left over from leaving a prompt buffer.
-    if api.nvim_get_current_win() == M.win and (cancel_input[key] or cancel_input[typed]
-      or typed:find("\27", 1, true)) then input_generation = input_generation + 1 end
     if require("config.mouse_capture").blocked(key, typed) then return end
+    -- Unicode text has no finite set of buffer mappings. Preserve its bytes
+    -- when it is the first input typed while viewing terminal history.
+    local navigation = package.loaded["config.panel_navigation"]
+    if terminal_panel() and vim.fn.mode() == "n" and not M.menu_context
+      and not (navigation and (navigation.state or navigation.closing))
+      and typed ~= "" and typed:byte(1) >= 192 then
+      M.history = nil
+      api.nvim_feedkeys("i" .. typed, "ni", false)
+      return ""
+    end
     if keys[typed] ~= nil then key = typed end
     if keys[key] == nil then return end
     local mouse = vim.fn.getmousepos()
+    M.mouse_down = not keys[key] and mouse.winid == M.win or nil
     if mouse.winid == M.win then
       if keys[key] and mouse.line > 0 then resume_input() end
       return

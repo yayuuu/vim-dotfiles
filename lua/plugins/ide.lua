@@ -206,7 +206,7 @@ return {
     opts.options.theme = require("config.colors").statusline()
     opts.options.component_separators = { left = "|", right = "|" }
     opts.options.section_separators = { left = "", right = "" }
-    opts.sections.lualine_a = { "mode" }
+    opts.sections.lualine_a = { { "mode", fmt = function(mode) return require("config.terminals").mode_label(mode) end } }
     opts.sections.lualine_b = { { function()
       return (require("config.git_sync").branch():gsub("%%", "%%%%"))
     end, icon = "git", on_click = function(_, button)

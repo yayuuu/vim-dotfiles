@@ -226,6 +226,7 @@ function M.setup()
       end
       local state = M.sources[source]
       if not state or not state.bar or not valid(state.bar.win) then return "" end
+      require("config.terminals").begin_history(source)
       if vim.fn.mode() == "t" then api.nvim_feedkeys(vim.keycode("<C-\\><C-n>"), "ni", false) end
       vim.schedule(function() local offset = bounds(source); M.set(source, offset + wheel) end)
       return ""
@@ -251,6 +252,7 @@ function M.setup()
       end
       if hit then
         if vim.fn.mode() == "t" and vim.bo[api.nvim_win_get_buf(source)].buftype == "terminal" then
+          require("config.terminals").begin_history(source)
           -- Scrollback must leave live input, which otherwise follows the
           -- shell cursor on redraw. Never remap Ctrl+N to our New file action.
           api.nvim_feedkeys(vim.keycode("<C-\\><C-n>"), "ni", false)

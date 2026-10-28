@@ -80,12 +80,11 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-menu-') as directory:
         assert (root / 'input').read_bytes() == before, 'Menu keys must not reach the child'
 
         editor.call('nvim_input', '<Esc><Esc>')
-        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Enter scrollback')
+        input_mode()
         right_click()
         menu()
         editor.call('nvim_input', '<Esc>')
-        editor.wait(lambda: editor.lua('return vim.bo.buftype=="terminal" and vim.fn.mode()=="n"'),
-                    'Dismissal preserves scrollback mode')
+        input_mode()
 
         right_click()
         choose('Select all')
@@ -138,7 +137,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-menu-') as directory:
         assert editor.call('nvim_buf_get_lines', document, 0, -1, False) == ['Unsaved document']
         assert editor.lua('return vim.api.nvim_win_get_buf(require("config.ide").editor_window())') == document
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
-        print('PASS: terminal uses shared menu/navigation; dismissal restores input, scrollback and selection; '
+        print('PASS: terminal uses shared menu/navigation; dismissal restores input and selection; '
               'external clipboard Copy and native bracketed Paste work; mouse-aware child receives full right clicks; '
               'new session preserves running child and unsaved document.')
     finally:

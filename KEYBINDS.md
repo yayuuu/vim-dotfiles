@@ -131,6 +131,10 @@ The code context menu also provides documentation, code actions, and formatting.
 | Esc in the terminal, including repeated presses | Send Esc to the running program; keep terminal input |
 
 File > Open folder opens a project. Terminal > New terminal creates a session.
+The terminal blocks shortcuts that enter Normal mode. Scrolling and selecting
+output remain available; typing while viewing history resumes terminal input
+and sends the typed keys to the running program. Esc also resumes input from
+history. The status bar shows Terminal while browsing history.
 Right-click in the terminal opens Copy (or Copy line), Paste, Select all, and
 New terminal in the shared menu. Applications that handle mouse input receive
 their own right clicks. Esc closes the menu and restores the previous input,

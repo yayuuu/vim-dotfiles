@@ -465,7 +465,16 @@ or perform operations on the user's actual repositories independently.
   Returning from Watches or another native prompt must wait for Neovim's prompt
   mode transition before resuming terminal input; a WinEnter callback alone can
   run too early and leave the terminal in Normal, swallowing Enter. Preserve
-  scrollback and explicit Esc, Esc exits. Verify the actual CR byte in a child
+  scrollback, but never expose Normal commands in managed terminal sessions.
+  Block Ctrl+Backslash Ctrl+N/Ctrl+O; recover unexpected mode changes while the
+  terminal retains focus. During native scrollback, ordinary keys immediately
+  enter terminal input and reach the PTY, including queued text and Enter.
+  Esc resumes input from scrollback; in live input, repeated Esc reaches the child.
+  Display Terminal in the status bar during the native scrollback helper state.
+  Keep the helper scoped through `terminals.begin_history` in scrollbar handlers;
+  retain selection, menu context, mouse capture, Alt+A preview and ordinary modes
+  in the session list, debugger and terminals owned by other plugins.
+  Verify this with `tests/terminal_input_lock.py`, and verify the actual CR byte in a child
   PTY while the debugger is paused with `tests/debugger_navigation.py`.
   Keypad navigation with NumLock off must reach terminal programs as Home/End,
   arrows, PageUp/PageDown, Insert/Delete, preserving numeric keypad digit input.
