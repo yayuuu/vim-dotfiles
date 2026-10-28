@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-navigation-') as director
 
         def select_sessions():
             editor.lua('vim.api.nvim_set_current_win(...);vim.cmd("startinsert")', main)
-            key('<M-a><M-a><Down><Right><CR>')
+            key('<M-a><Down><Right><CR>')
             assert editor.lua('return vim.api.nvim_get_current_win()') == sessions
             assert editor.lua('return vim.fn.mode()') == 'n'
             key('i')

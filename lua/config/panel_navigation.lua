@@ -68,6 +68,32 @@ local function candidates()
   return result
 end
 
+local function select_tabs(state)
+  local win = state.target
+  if win == "menu" or not valid(win) then return false end
+  local buf = api.nvim_win_get_buf(win)
+  local ft = vim.bo[buf].filetype
+  local ide = require("config.ide")
+  local diff = require("config.diff").active
+  local diff_pane = diff and (win == diff.left or win == diff.right)
+  local sidebar, tree = require("config.sidebar").state()
+  if sidebar and (ft == "neo-tree" or ft == "aerial" or ft == "ide_git_history" or ft:match("^dapui_")
+    or vim.b[buf].ide_search_input or vim.b[buf].ide_git_input) then
+    state.kind, state.tree, state.items = "sidebar", tree, vim.deepcopy(require("neo-tree").config.source_selector.sources)
+    for index, item in ipairs(state.items) do if item.source == sidebar.name then state.index = index end end
+  elseif (ide.is_document(buf) or diff_pane) and not ide.is_tool_tab() then
+    local strip = require("config.editor_tabs")
+    strip.draw()
+    state.kind, state.items, state.first = "documents", vim.deepcopy(strip.ids or {}), strip.first
+    for index, item in ipairs(state.items) do if item == (diff_pane and diff.buf or buf) then state.index = index end end
+  else
+    return false
+  end
+  if #state.items == 0 then return false end
+  state.phase = "tabs"
+  return true
+end
+
 local function sidebar_bar(state)
   local tree = state.tree
   if not valid(tree) then M.cancel(); return end
@@ -175,9 +201,12 @@ function M.confirm()
   M.cancel(true)
   if state.phase == "tabs" then
     if state.kind == "sidebar" then
+      if valid(state.tree) then api.nvim_set_current_win(state.tree) end
+      vim.cmd("stopinsert")
       require("neo-tree.command").execute({ source = item.source, action = "focus" })
       vim.cmd("stopinsert")
     else
+      if valid(target) then api.nvim_set_current_win(target) end
       if item and api.nvim_buf_is_valid(item) then require("config.ide").open_file(nil, item) end
       if vim.bo.modifiable and not vim.bo.readonly and (vim.bo.buftype == "" or vim.b.ide_diff_file) then vim.cmd("startinsert") end
     end
@@ -216,9 +245,12 @@ function M.close_tab()
       api.nvim_set_current_win(valid(state.origin) and state.origin or require("config.ide").editor_window())
       M.toggle()
       local replacement = M.state
-      if not replacement or replacement.kind ~= "documents" then return end
-      if not next_buf and vim.api.nvim_buf_get_name(0) == "" and not vim.bo.modified
-        and api.nvim_buf_line_count(0) == 1 and api.nvim_get_current_line() == "" then
+      if not replacement then return end
+      replacement.target = valid(state.target) and state.target or require("config.ide").editor_window()
+      if not select_tabs(replacement) or replacement.kind ~= "documents" then return end
+      local document = api.nvim_win_get_buf(replacement.target)
+      if not next_buf and api.nvim_buf_get_name(document) == "" and not vim.bo[document].modified
+        and api.nvim_buf_line_count(document) == 1 and api.nvim_buf_get_lines(document, 0, 1, false)[1] == "" then
         -- Closing the last real card leaves a placeholder editor. Keep owning
         -- input until Enter/Esc/click, instead of typing the remaining repeats.
         replacement.phase, replacement.items = "tabs", {}
@@ -251,10 +283,7 @@ end
 function M.toggle()
   local state = M.state
   if state then
-    if state.phase == "tabs" then
-      require("config.editor_tabs").preview = nil
-      require("config.editor_tabs").draw()
-      state.phase = "panels"
+    if state.phase == "panels" and select_tabs(state) then
       M.show()
     else
       M.cancel(true)
@@ -265,22 +294,7 @@ function M.toggle()
   local ide = require("config.ide")
   if vim.bo.filetype == "NvMenu" then ide.close_menu() end
   local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
-  local diff = require("config.diff").active
-  local diff_pane = diff and (win == diff.left or win == diff.right)
-  local sidebar, tree = require("config.sidebar").state()
   state = { origin = win, buf = buf, target = win, phase = "panels", index = 1, bindings = {}, overlays = {}, guicursor = vim.o.guicursor }
-  local ft = vim.bo[buf].filetype
-  if sidebar and (ft == "neo-tree" or ft == "aerial" or ft == "ide_git_history" or ft:match("^dapui_")) then
-    state.kind, state.tree, state.items = "sidebar", tree, vim.deepcopy(require("neo-tree").config.source_selector.sources)
-    for index, item in ipairs(state.items) do if item.source == sidebar.name then state.index = index end end
-    state.phase = "tabs"
-  elseif (ide.is_document(buf) or diff_pane) and not ide.is_tool_tab() then
-    local strip = require("config.editor_tabs")
-    strip.draw()
-    state.kind, state.items, state.first = "documents", vim.deepcopy(strip.ids or {}), strip.first
-    for index, item in ipairs(state.items) do if item == (diff_pane and diff.buf or buf) then state.index = index end end
-    if #state.items > 0 then state.phase = "tabs" end
-  end
   local found = false
   for _, target in ipairs(candidates()) do if target == win then found = true end end
   if not found then state.target = ide.editor_window() end
@@ -395,7 +409,7 @@ function M.setup()
       end
     end
   end, namespace)
-  vim.keymap.set(modes, "<M-a>", M.toggle, { desc = "Choose tabs / panels / menu" })
+  vim.keymap.set(modes, "<M-a>", M.toggle, { desc = "Choose panels / tabs / menu" })
   vim.keymap.set(modes, "<S-F10>", M.context, { desc = "Selected item context menu" })
   -- Kitty's optional standalone LEFT_ALT code; ordinary terminals do not send
   -- modifier-only events. Shift+F10 remains available without that protocol.

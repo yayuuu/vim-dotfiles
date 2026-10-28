@@ -67,6 +67,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         geometry = native_geometry()
         order = editor.lua('return require("config.editor_tabs").ids')
         key('<M-a>')
+        assert state()['phase'] == 'panels' and state()['target'] == main
+        assert current() == main and mode() == 'i' and native_geometry() == geometry
+        key('<M-a>')
         assert state()['phase'] == 'tabs' and state()['kind'] == 'documents'
         key('<Right>')
         assert editor.call('nvim_win_get_buf', main) == editor.call('nvim_get_current_buf')
@@ -79,13 +82,27 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         assert state() is None
         assert editor.lua('return vim.api.nvim_win_get_buf(...)', main) == order[1]
         assert mode() == 'i' and editor.lua('return vim.o.guicursor') == caret
-        key('<M-a><Right><Esc>')
+        key('<M-a><M-a><Right><Esc>')
         assert state() is None and current() == main
         before = editor.call('nvim_buf_get_lines', order[1], 0, 1, False)[0]
         key('X')
         assert editor.call('nvim_buf_get_lines', order[1], 0, 1, False)[0] != before, 'Restore Insert mappings'
 
-        key('<M-a><M-a><Left>')
+        # The second press uses the highlighted block while focus stays put.
+        key('<M-a><Left><M-a><Right>')
+        assert state()['phase'] == 'tabs' and state()['kind'] == 'sidebar' and state()['index'] == 3
+        assert current() == main and mode() == 'i'
+        assert editor.lua('return require("config.sidebar").state().name') == 'filesystem'
+        assert native_geometry() == geometry
+        key('<CR>')
+        editor.wait(lambda: editor.lua('return require("config.sidebar").state().name') == 'search', 'Accept tabs of the highlighted sidebar')
+        key('<M-a><M-a><Left><CR>')
+        editor.wait(lambda: editor.lua('return require("config.sidebar").state().name') == 'filesystem', 'Return to Files')
+        key('<M-a><Right><CR>')
+        assert current() == main and mode() == 'i'
+        geometry = native_geometry()  # Files recreates its Symbols window.
+
+        key('<M-a><Left>')
         assert state()['phase'] == 'panels' and current() == main
         tree = editor.lua('local _,w=require("config.sidebar").state();return w')
         assert state()['target'] == tree
@@ -114,7 +131,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         assert current() == symbols and mode() == 'n'
         key('i')
         assert mode() == 'n', 'Symbols remains in Normal mode'
-        key('<M-a><Right>')
+        key('<M-a><M-a><Right>')
         assert state()['kind'] == 'sidebar' and state()['index'] == 3
         assert editor.lua('return require("config.sidebar").state().name') == 'filesystem'
         row = editor.call('nvim_win_get_position', tree)[0]
@@ -122,7 +139,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         highlighted(tree, column)
         key('<CR>')
         editor.wait(lambda: editor.lua('return require("config.sidebar").state().name') == 'search', 'Commit Search tab')
-        key('<M-a><Left><CR>')
+        key('<M-a><M-a><Left><CR>')
         editor.wait(lambda: editor.lua('return require("config.sidebar").state().name') == 'filesystem', 'Commit Files tab')
         assert mode() == 'n'
         editor.lua('local s=require("config.sidebar").state();local n=s.tree:get_node(...);require("config.files").select(s,n)', str(files[0]))
@@ -138,7 +155,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         key(chr(57443))
         assert editor.lua('return vim.bo.filetype') == 'NvMenu', 'Optional standalone left Alt event'
         key('<Esc>')
-        key('<M-a><M-a>')
+        key('<M-a>')
         point = editor.lua('local s=require("config.sidebar").state();local _,l=s.tree:get_node(...);'
                            'local p=vim.fn.screenpos(s.winid,l,1);return {p.row-1,p.col+4}', str(files[1]))
         editor.click(*point)
@@ -147,7 +164,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
 
         # A mouse press cancels selection before the real document-tab handler.
         editor.lua('require("config.ide").open_file(nil,...)', buffers[-1])
-        key('<M-a><Right>')
+        key('<M-a><M-a><Right>')
         point = editor.lua('local t=require("config.editor_tabs");local p=vim.api.nvim_win_get_position(t.win);'
                            'for _,h in ipairs(t.hits) do if h.id==... and not h.close then return {p[1],p[2]+h.first} end end', buffers[-1])
         editor.click(*point)
@@ -155,7 +172,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         assert mode() == 'i'
 
         # The menu bar is reachable both spatially and through the Alt+A cycle.
-        key('<M-a><M-a><Up>')
+        key('<M-a><Up>')
         assert state()['target'] == 'menu'
         key('<CR>')
         assert editor.lua('return require("config.ide").menu_name') == 'File'
@@ -186,6 +203,16 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
         assert (root / 'input').read_bytes() == b'', 'Panel preview cannot send keys to the terminal'
         key('ok')
         editor.wait(lambda: (root / 'input').read_bytes() == b'ok', 'Terminal mappings restored')
+        key('<M-a><Up><M-a><Right>')
+        assert state()['phase'] == 'tabs' and state()['kind'] == 'documents'
+        assert state()['target'] == main and current() == terminal and mode() == 't'
+        key('<Esc>')
+        assert current() == terminal and mode() == 't'
+        assert (root / 'input').read_bytes() == b'ok', 'Document preview from a terminal also owns input'
+        key('<M-a><Up><M-a><Right><CR>')
+        assert state() is None and current() == main and mode() == 'i'
+        editor.lua('local t=require("config.terminals");t.show(t.active)')
+        editor.wait(lambda: mode() == 't', 'Return to terminal input')
         key('<M-a><Up><CR>')
         assert current() == main and mode() == 'i'
         assert editor.call('nvim_buf_get_lines', buffers[-1], 1, 2, False) == ['  return "Unsaved"']
@@ -197,12 +224,14 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
             pump()
             geometry = native_geometry()
             key('<M-a>')
+            assert state()['phase'] == 'panels' and state()['target'] == pane
+            key('<M-a>')
             assert state()['kind'] == 'documents', 'Both diff columns share document tabs'
             key('<Right>')
             assert native_geometry() == geometry and current() == pane
             key('<Esc>')
             assert native_geometry() == geometry and current() == pane
-        key('<M-a><Right><CR>')
+        key('<M-a><M-a><Right><CR>')
         assert editor.lua('return require("config.diff").active') is None, 'Accept a regular tab from a diff'
         assert mode() == 'i'
 
@@ -210,18 +239,19 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-') as directory:
             path = root / f'overflow-document-with-long-name-{index}.txt'
             path.write_text('Tab overflow\n')
             editor.lua('require("config.ide").open_file(...)', str(path))
-        key('<M-a>' + '<Right>' * 8)
+        key('<M-a><M-a>' + '<Right>' * 8)
         assert editor.lua('return require("config.editor_tabs").first') > 1
         key('<Esc>')
         assert editor.lua('return require("config.editor_tabs").first') == 1, 'Esc restores tab scrolling'
-        key('<M-a>' + '<Right>' * 8)
+        key('<M-a><M-a>' + '<Right>' * 8)
         candidate, point = editor.lua('local t=require("config.editor_tabs");local p=vim.api.nvim_win_get_position(t.win);'
                                       'for _,h in ipairs(t.hits) do if h.id==t.preview and not h.close then '
                                       'return {t.preview,{p[1],p[2]+h.first}} end end')
         editor.click(*point)
         assert state() is None and editor.lua('return vim.api.nvim_get_current_buf()') == candidate, 'Mouse opens the visible scrolled preview card'
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
-        print('PASS: deferred document/sidebar tab selection, spatial framed panels, Enter/Esc, native mouse cancellation, '
+        print('PASS: panels first, then tabs of the highlighted block across editor/sidebar/terminal focus; '
+              'deferred document/sidebar tab selection, spatial framed panels, Enter/Esc, native mouse cancellation, '
               'menu-bar navigation/actions, Normal Files/Symbols, keyboard file menu, restored mappings/caret, '
               'and real terminal input isolation; unsaved documents and window geometry preserved.')
     finally:

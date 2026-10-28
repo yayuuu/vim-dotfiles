@@ -207,7 +207,9 @@ return {
     opts.options.component_separators = { left = "|", right = "|" }
     opts.options.section_separators = { left = "", right = "" }
     opts.sections.lualine_a = { "mode" }
-    opts.sections.lualine_b = { { "branch", icon = "git", on_click = function(_, button)
+    opts.sections.lualine_b = { { function()
+      return (require("config.git_sync").branch():gsub("%%", "%%%%"))
+    end, icon = "git", on_click = function(_, button)
       if button == "l" and require("config.panel_mouse").statusline_click() then
         vim.schedule(function() require("config.git").branches() end)
       end
@@ -229,14 +231,31 @@ return {
     opts.sections.lualine_x = { "encoding", "fileformat", "filetype" }
     opts.sections.lualine_y = { "progress" }
     opts.sections.lualine_z = { "location" }
+    -- Tool extensions replace the regular sections. Retain their own details
+    -- while showing the same project Git buttons in every focused panel.
+    -- Menus already carry the complete statusline captured from their source.
+    for index, extension in ipairs(opts.extensions) do
+      if type(extension) == "string" then extension = require("lualine.extensions." .. extension) end
+      if not vim.tbl_contains(extension.filetypes or {}, "NvMenu") then
+        extension = vim.deepcopy(extension)
+        extension.sections = extension.sections or {}
+        local git = vim.deepcopy(opts.sections.lualine_b)
+        vim.list_extend(git, extension.sections.lualine_b or {})
+        extension.sections.lualine_b = git
+        opts.extensions[index] = extension
+      end
+    end
   end },
   { "folke/snacks.nvim", opts = {
     dashboard = { enabled = false }, scroll = { enabled = false },
     terminal = { win = { position = "bottom", relative = "win", height = 0.25, stack = false, resize = false }, shell = "/bin/bash" },
-    input = { win = { on_win = function(win)
+    input = { win = { keys = {
+      i_esc = { "<esc>", { "cmp_close", "cancel" }, mode = "i", expr = true },
+    }, on_win = function(win)
       require("config.popup_ui").register(win.win, function() win:execute("cancel") end)
     end } },
     picker = {
+      win = { input = { keys = { ["<Esc>"] = { "cancel", mode = { "n", "i" } } } } },
       on_show = function(picker)
         require("config.popup_ui").register(picker.layout.root.win, function() picker:close() end)
       end,

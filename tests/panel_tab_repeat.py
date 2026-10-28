@@ -32,11 +32,11 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-tab-repeat-') as directory:
                     assert actual == content, ('Repeated q leaked into a document', actual)
                     assert not editor.lua('return vim.bo[...].modified', buf)
 
-        key('<M-a><Right>')
+        key('<M-a><M-a><Right>')
         key('q<CR>')
         clean_documents()
         assert editor.lua('return require("config.panel_navigation").state') is None, 'Queued Enter accepts after closing'
-        key('<M-a>')
+        key('<M-a><M-a>')
         for _ in buffers:
             # Include queued repeats within one input batch as well as repeats
             # arriving after the asynchronous close callback has completed.
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-tab-repeat-') as directory:
         editor.call('nvim_buf_set_lines', document, 0, -1, False, ['Unsaved text'])
         editor.lua('_G.repeat_select=vim.ui.select;vim.ui.select=function(_,_,cb) '
                    '_G.repeat_dialogs=(_G.repeat_dialogs or 0)+1;_G.repeat_answer=cb end')
-        key('<M-a>' + 'q' * 30)
+        key('<M-a><M-a>' + 'q' * 30)
         key('q' * 20)
         assert editor.call('nvim_get_current_line') == 'Unsaved text'
         assert editor.lua('return _G.repeat_dialogs') == 1
@@ -71,10 +71,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-tab-repeat-') as directory:
         key('<Esc>q')
         assert editor.lua('return require("config.panel_navigation").state') is None
         assert 'q' in editor.call('nvim_get_current_line'), 'Esc deliberately restores typing'
-        key('<M-a>q')
+        key('<M-a><M-a>q')
         editor.wait(lambda: editor.lua('return #Snacks.picker.get()>0'), 'Real unsaved-changes dialog')
-        key('<Esc>')
-        assert editor.lua('return vim.fn.mode()') == 'n', 'First Esc reaches the picker input mode'
         key('<Esc>')
         editor.wait(lambda: editor.lua('return #Snacks.picker.get()==0'), 'Esc reaches the real save dialog')
         assert editor.lua('local n=require("config.panel_navigation");return n.state==nil and n.closing==nil')

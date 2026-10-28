@@ -91,8 +91,11 @@ or perform operations on the user's actual repositories independently.
   Selecting a tab replaces the entire column's contents instead of adding a column.
 - The main editor is beside it, with a bottom panel below the editor. Opening a tool
   must not squeeze the editor into a thin strip or create duplicate panels.
-- Alt+A previews the current panel's tabs first: document cards in the editor,
-  or sidebar source tabs from Files/Symbols and other sidebar sections. Left/Right
+- Alt+A always starts spatial panel selection with all four arrows and a bright
+  frame, retaining focus, mode and window geometry until Enter. A second Alt+A
+  previews tabs in the currently highlighted panel, even when it differs from
+  the focused panel: document cards in the editor, or sidebar source tabs from
+  Files/Symbols and other sidebar sections. Left/Right
   highlight a candidate without opening it; Enter commits, Esc cancels. In document
   tab selection, q closes the highlighted card through the shared close action,
   retaining save/discard/cancel prompts. Continue selection at the next surviving
@@ -100,11 +103,9 @@ or perform operations on the user's actual repositories independently.
   asynchronous closes and focus changes; after the last card retain an empty
   selection until Enter, Esc or a mouse press, so held q cannot edit the placeholder.
   Keep real save-dialog input available. Verify bursts/held keys and slow prompts
-  with `tests/panel_tab_repeat.py`. If there
-  are no tabs (such as a terminal), start panel selection directly. Another Alt+A
-  selects panels spatially with all four arrows and a bright frame, retaining
-  focus, mode and window geometry until Enter. Another Alt+A opens File in the
-  global menu; the menu bar is also a spatial panel candidate above the editor.
+  with `tests/panel_tab_repeat.py`. Another Alt+A opens File in the global menu;
+  skip the tab phase if the highlighted panel has no tabs (such as a terminal).
+  The menu bar is also a spatial panel candidate above the editor.
   Mouse presses cancel preview before normal click handling and perform the
   clicked action, including a tab scrolled into view during preview. Restore
   temporary mappings and caret styling; Esc also restores tab scrolling.
@@ -203,15 +204,25 @@ or perform operations on the user's actual repositories independently.
 
 ## Editing and mouse support
 
-- Opened files start in Insert mode. Esc switches to Normal mode;
-  `i` returns to Insert mode. Clicking code on the right side of a diff enters Insert mode.
+- Opened files start in Insert mode. Esc first dismisses completion (including
+  documentation, signatures and ghost text) or a transient popup, retaining input.
+  Only an editor document without anything to dismiss enters Normal on Esc;
+  `i` returns to Insert. Clicking code on the right side of a diff enters Insert.
+  Non-editor text fields, including Search, Commit message and the debug console,
+  retain Insert on Esc. Dialogs and pickers cancel directly without a Normal-mode
+  step; command-line Esc first closes completion, then cancels the command and
+  resumes the originating input. Terminal Esc keys go to the child, including
+  repeated Esc. Keep this policy in `escape.lua` and public widget options;
+  verify it with `tests/escape_input.py`.
 - Preserve mouse and Shift selection, copy/cut/paste,
   duplication, and movement of entire selected blocks.
 - Editing actions started in Insert or Select/Visual mode retain the selection
   or resume Insert when they finish in the same editable document. Copying a
   selection resumes Insert, as do cut, paste and duplication; comment/indent/move
-  actions may retain Select. Esc explicitly enters Normal, including from a
-  selection created in Insert. Preserve deliberate Normal-mode editing after Esc
+  actions may retain Select. In editor documents, Esc enters Normal, including
+  from a selection created in Insert, only after transient UI is dismissed.
+  In non-editor inputs, ending a selection with Esc resumes Insert.
+  Preserve deliberate Normal-mode editing after Esc
   and the modes of tool panels, read-only documents and dialogs. Execute selection
   edits without draining queued user input in an intermediate Normal mode.
 - Shift+Tab in editor Insert mode decreases the current line's indentation by
@@ -245,6 +256,9 @@ or perform operations on the user's actual repositories independently.
 - Saving does not format a file automatically; formatting is an explicit action.
 - Find text (Ctrl+F) has a clickable `⇄` button at its right edge. It opens the
   same Replace action as Ctrl+H and Search > Replace, carrying over the Find text.
+  F3 in Find confirms the current query through the same action as Enter and
+  visits the first match once. It closes Find and resumes editor input; later
+  F3 presses advance to subsequent matches. Verify this with `tests/search_replace.py`.
   Keep its button anchored after resizing Find; relative float updates include
   both `row` and `col`, and resizing with an open Find is covered by the UI test.
   Close the helper through Snacks' public `on_close` callback, including when
@@ -262,6 +276,8 @@ or perform operations on the user's actual repositories independently.
   blank space keeps the usual mouse guard. Keep Grug input metadata integration
   local to `search.lua`. Disable completion and automatic result folding in this
   panel so background updates do not steal input mode from a clicked field.
+  Ctrl+Enter applies replacement from Insert through the public instance action;
+  Esc closes the panel directly, without requiring Normal-mode commands.
 - F2 renames the selected file/folder in Files or the current file in the editor,
   including an editable diff. Share the action with Rename in context menus.
   Preserve buffer IDs, unsaved contents, and diff mappings; refuse existing targets.
@@ -448,7 +464,8 @@ or perform operations on the user's actual repositories independently.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
   Keypad navigation with NumLock off must reach terminal programs as Home/End,
   arrows, PageUp/PageDown, Insert/Delete, preserving numeric keypad digit input.
-  Esc, Esc exits input mode; clicking again resumes it. Preserve text selection.
+  Esc, including repeated presses, stays in terminal input and reaches the child.
+  Preserve text selection and the existing explicit terminal scrollback actions.
   Dragging/clicking its vertical scrollbar enters native scrollback mode so
   history stays at the requested position. Consume the mouse gesture and use
   an unremapped terminal escape; never invoke `:normal` from terminal input or
@@ -631,6 +648,15 @@ or perform operations on the user's actual repositories independently.
   preserving staged changes. Commit includes staged changes and the message from
   the panel's input field.
 - Refresh the status, graph, branch, and upstream after operations. The ahead/behind
+  counters and branch on the global status bar come from the active project's
+  shared `git_sync.lua` cache, never from the focused buffer's path. Keep both
+  visible in virtual HEAD/diff buffers, terminals, sidebars and text inputs.
+  Tool-specific Lualine extensions retain these buttons and their own details;
+  menus retain the captured complete source statusline without duplicating Git.
+  Escape `%` in branch names when rendering statusline text. Detached HEAD shows
+  its short hash, unborn branches retain their names, and non-repository projects
+  show no stale Git information. Verify this with `tests/git_statusline.py`.
+  The ahead/behind
   button performs fetch, pull according to Git settings, and push. Without upstream,
   publish the current branch with `push --set-upstream`, respecting configured push
   remotes, then preferring origin or the only remote; offer a selection if ambiguous.
@@ -752,6 +778,7 @@ or perform operations on the user's actual repositories independently.
 | `menu_navigation.lua` | Shared keyboard/mouse row selection, hidden menu caret and cursor restoration |
 | `menu_mouse.lua` | Persistent popup gesture/release guard and recovery of orphaned click blocks |
 | `panel_navigation.lua` | Alt+A tab previews, spatial panel frames, menu access and Normal Files/Symbols |
+| `escape.lua` | Dismiss completion/popups before Normal; retain input outside editor documents |
 | `search.lua` | Find input, Replace button, singleton panel, active file and clickable fields |
 | `project_search.lua`, `search_source.lua` | Search sidebar, pinned input/modes, streamed rg results and source navigation |
 | `editor_tabs.lua`, `tabs.lua`, `tab_source.lua` | Tab bar, MRU, Tabs source |
@@ -829,7 +856,8 @@ Run a single scenario:
   Status-bar branch creation and publication → `git_branch_publish.py`;
   Remote branch discovery and tracked switching → `git_remote_branches.py`;
   editing → `comment_selection.py`, `editor_focus_input.py`; selection action modes,
-  Escape and queued typing → `editing_modes.py`; document creation → `new_file.py`;
+  Escape and queued typing → `editing_modes.py`; popup dismissal and input-only fields → `escape_input.py`;
+  document creation → `new_file.py`;
   Offscreen mouse/keyboard selections, copy, typing and terminal paste → `selection_scroll.py`.
   system clipboard provider selection and cross-process Copy/Cut/Paste → `clipboard.py`;
   file/folder renaming → `file_rename.py`;

@@ -44,16 +44,16 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-navigation-keys-') as direct
             assert editor.call('nvim_buf_get_lines', document, 0, -1, False) == content, 'Arrows must not insert internal key bytes'
             assert not editor.lua('return vim.bo[...].modified', document)
 
-        for sequence in ('<M-a><Esc>', '<M-a><CR>', '<M-a><M-a><Esc>'):
+        for sequence in ('<M-a><Esc>', '<M-a><CR>', '<M-a><M-a><Esc>', '<M-a><M-a><CR>'):
             key(sequence)
             arrows()
 
         # Visit sidebar tabs and Symbols, then accept the editor spatially.
-        key('<M-a><M-a><Left><CR>')
+        key('<M-a><Left><CR>')
         assert editor.lua('return vim.bo.filetype') == 'neo-tree'
-        key('<M-a><Right><Left><M-a><Down><CR>')
+        key('<M-a><M-a><Right><Left><Esc><M-a><Down><CR>')
         assert editor.lua('return vim.bo.filetype') == 'aerial'
-        key('<M-a><M-a><Up><Right><CR>')
+        key('<M-a><Up><Right><CR>')
         assert editor.lua('return vim.api.nvim_get_current_win()') == main
         arrows()
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')

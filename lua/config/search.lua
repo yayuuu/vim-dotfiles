@@ -71,6 +71,8 @@ function M.replace(search)
   require("config.popup_ui").register(M.win, M.close)
   vim.keymap.set({ "n", "i" }, "<C-h>", function() M.replace() end,
     { buffer = inst:get_buf(), desc = "Focus Replace" })
+  vim.keymap.set({ "n", "i" }, "<C-CR>", function() inst:replace() end,
+    { buffer = inst:get_buf(), desc = "Apply replacement" })
   vim.cmd("startinsert")
 end
 
@@ -172,7 +174,10 @@ function M.find()
       self:execute("cancel")
       vim.schedule(function() M.replace(text) end)
     end },
-    keys = { replace = { "<C-h>", "replace", mode = { "n", "i" } } },
+    keys = {
+      replace = { "<C-h>", "replace", mode = { "n", "i" } },
+      find = { "<F3>", "confirm", mode = { "n", "i" } },
+    },
   } }, function(text)
     if text and text ~= "" and valid(win) then
       api.nvim_set_current_win(win)

@@ -100,7 +100,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-search-replace-') as directory:
         editor.wait(lambda: values()['paths'] == str(first), 'Tab click updates Replace target')
         editor.lua('require("config.ide").open_file(...)', str(second))
         editor.wait(lambda: values()['paths'] == str(second).replace(' ', r'\ '), 'Target follows the file with spaces')
-        inst('i:replace()')
+        editor.lua('local i=require("grug-far").get_instance("desktop-replace");'
+                   'vim.api.nvim_set_current_win(vim.fn.bufwinid(i:get_buf()));i:goto_input("replacement");vim.cmd("startinsert")')
+        editor.call('nvim_input', '<C-CR>')
         editor.wait(lambda: second.read_text() == 'changed second\n', 'Replace modifies the selected file')
         assert first.read_text() == 'needle first\nneedle again\n'
         assert editor.lua('return vim.api.nvim_buf_get_lines(vim.fn.bufnr(...),0,-1,false)', str(notes)) == ['Unsaved notes']
@@ -122,13 +124,35 @@ with tempfile.TemporaryDirectory(prefix='nvim-search-replace-') as directory:
         editor.wait(lambda: not editor.lua('return vim.api.nvim_win_is_valid(...)', panel), 'Cross closes Replace')
         editor.call('nvim_input', '<C-h>')
         editor.wait(lambda: inst('return i ~= nil and i:is_open()'), 'Ctrl+H reopens Replace after closing')
+        editor.wait(lambda: editor.lua('return vim.bo.filetype=="grug-far" and vim.fn.mode()=="i"'), 'Reopened Replace accepts input')
+        editor.call('nvim_input', '<Esc>')
+        editor.wait(lambda: not inst('return i ~= nil and i:is_open()'), 'Esc closes Replace directly from input')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Replace returns to editor input')
         editor.lua('require("config.search").close();require("config.ide").find()')
         editor.wait(lambda: editor.lua('return require("config.search").find_input ~= nil'), 'Find reopens')
         editor.call('nvim_input', 'second<CR>')
         editor.wait(lambda: editor.lua('return vim.fn.getreg("/")') == r'\Vsecond', 'Ordinary Find confirmation still searches')
+
+        # F3 confirms the fresh query rather than repeating the previous search
+        # or skipping the first match by confirming and repeating it twice.
+        editor.lua('require("config.ide").open_file(...);vim.api.nvim_win_set_cursor(0,{1,0})', str(first))
+        document = editor.call('nvim_get_current_buf')
+        original = editor.call('nvim_buf_get_lines', document, 0, -1, False)
+        editor.call('nvim_input', '<C-f>')
+        editor.wait(lambda: editor.lua('return vim.bo.filetype=="snacks_input" and vim.fn.mode()=="i"'), 'Find accepts a new query')
+        editor.call('nvim_input', 'needle<F3>')
+        editor.wait(lambda: editor.lua('return require("config.search").find_input==nil '
+                                       'and vim.fn.getreg("/")=="\\\\Vneedle" '
+                                       'and vim.api.nvim_get_current_buf()==... and vim.fn.mode()=="i"', document), 'F3 confirms Find and resumes editor input')
+        assert editor.call('nvim_win_get_cursor', 0) == [1, 0], 'F3 in Find visits the first match exactly once'
+        editor.call('nvim_input', '<F3>')
+        editor.wait(lambda: editor.call('nvim_win_get_cursor', 0) == [2, 0], 'Next F3 visits the next match')
+        assert editor.lua('return vim.fn.mode()') == 'i'
+        assert editor.call('nvim_buf_get_lines', document, 0, -1, False) == original
+        assert not editor.lua('return vim.bo[...].modified', document)
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
         print('PASS: Find-to-Replace arrow, shared Ctrl+H singleton, clickable empty inputs, active tab/file tracking, '
-              'scoped replacement, preserved unsaved notes, resizing, cross close/reopen and ordinary Find.')
+              'scoped replacement, preserved unsaved notes, resizing, cross close/reopen, Enter/F3 Find confirmation and repeated F3.')
     except Exception:
         print(editor.lua('local s=require("config.search");return vim.inspect({win=s.win,instance=require("grug-far").has_instance("desktop-replace"),'
                          'popup=require("config.popup_ui").buttons[s.win],owner=require("config.popup_ui").owners[s.win]})'))

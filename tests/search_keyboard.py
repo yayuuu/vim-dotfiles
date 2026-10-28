@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-search-keyboard-') as directory:
         key('<Down>')
 
         before = geometry()
-        key('<M-a><M-a><Up>')
+        key('<M-a><Up>')
         assert editor.lua('return require("config.panel_navigation").state.target') == field()
         assert editor.lua('return vim.api.nvim_get_current_win()') == results
         assert editor.lua('return #require("config.panel_navigation").state.overlays') == 4
@@ -100,9 +100,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-search-keyboard-') as directory:
         key('<M-a><Down><CR>')
         assert editor.lua('return vim.api.nvim_get_current_win()') == results
         normal_results()
-        key('<M-a><M-a><Up><CR><Esc>')
+        key('<M-a><Up><CR><Esc>')
         assert editor.lua('return vim.api.nvim_get_current_win()') == field()
-        assert editor.lua('return vim.fn.mode()') == 'n', 'Esc cancels a pending automatic Insert request'
+        assert editor.lua('return vim.fn.mode()') == 'i', 'Esc keeps the search field in Insert'
         key('<Down>')
         editor.lua('vim.api.nvim_set_current_win(...)', field())
         editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Direct field entry automatically resumes Insert')

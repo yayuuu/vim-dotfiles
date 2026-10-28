@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-input-') as directory:
             editor.wait(lambda: target.exists() and target.read_text() == 'ok', 'Typed command executes: ' + label)
         command('mouse.txt')
         editor.call('nvim_input', '<Esc><Esc>')
-        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Esc Esc exits terminal input')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 't', 'Esc Esc preserves terminal input')
         # Use a different column so this gesture is a single click, not a double click selection.
         editor.click(position[0], position[1] + 1)
         editor.wait(lambda: editor.lua('return vim.fn.mode()') == 't', 'Clicking same terminal resumes input')
@@ -32,6 +32,6 @@ with tempfile.TemporaryDirectory(prefix='nvim-terminal-input-') as directory:
         command('new.txt')
         editor.lua('vim.cmd("stopinsert");vim.api.nvim_set_current_win(require("config.ide").editor_window())')
         editor.wait(lambda: editor.lua('return vim.fn.mode()') != 't', 'Editor retains its own input mode')
-        print('PASS: terminal accepts typed commands after mouse click, same-pane click after Esc Esc, keyboard focus, and New terminal.')
+        print('PASS: terminal accepts typed commands after mouse click, repeated Esc, keyboard focus and New terminal; Esc never enters Normal.')
     finally:
         editor.close()

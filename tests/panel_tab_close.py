@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-tab-close-') as directory:
         def closed(buf):
             return editor.lua('return not vim.api.nvim_buf_is_valid(...) or not vim.bo[...].buflisted', buf)
 
-        key('<M-a><Right>')
+        key('<M-a><M-a><Right>')
         assert preview() == buffers[1]
         key('q')
         editor.wait(lambda: closed(buffers[1]) and preview() == buffers[0], 'q closes the highlighted inactive card and selects its neighbor')
@@ -61,13 +61,33 @@ with tempfile.TemporaryDirectory(prefix='nvim-panel-tab-close-') as directory:
         assert editor.call('nvim_buf_get_lines', buffers[2], 0, 1, False)[0].startswith('q'), 'q outside the picker still types normally'
         editor.call('nvim_buf_set_lines', buffers[2], 0, -1, False, ['Original'])
         editor.lua('vim.bo.modified=false')
-        key('<M-a>q')
+        key('<M-a><M-a>q')
         editor.wait(lambda: closed(buffers[2]), 'q closes the last original document')
         assert editor.lua('local s=require("config.panel_navigation").state;return s and s.phase=="tabs" and #s.items==0')
         key('<CR>')
         assert editor.lua('return require("config.panel_navigation").state') is None
         assert editor.call('nvim_win_is_valid', main)
         assert editor.lua('return vim.o.guicursor') == caret
+
+        # Closing a card in the highlighted editor must resume tab selection
+        # while preserving the terminal that originally owned keyboard focus.
+        extra = []
+        for name in ('extra-one.txt', 'extra-two.txt'):
+            path = root / name
+            path.write_text('Keep terminal focus\n')
+            editor.lua('require("config.ide").open_file(...)', str(path))
+            extra.append(editor.lua('return vim.api.nvim_get_current_buf()'))
+        editor.lua('local t=require("config.terminals");t.show(t.active)')
+        terminal = editor.lua('return vim.api.nvim_get_current_win()')
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 't', 'Terminal input')
+        key('<M-a><Up><M-a><Right>q')
+        editor.wait(lambda: closed(extra[0]) and preview() == extra[1], 'Close a tab selected from another panel')
+        assert editor.lua('return vim.api.nvim_get_current_win()') == terminal
+        assert editor.lua('return vim.fn.mode()') == 't'
+        key('<CR>')
+        assert editor.lua('return vim.api.nvim_get_current_win()') == main
+        assert editor.lua('return vim.api.nvim_get_current_buf()') == extra[1]
+        assert editor.lua('return vim.fn.mode()') == 'i'
         assert 'Error executing' not in editor.lua('return vim.fn.execute("messages")')
         print('PASS: q closes inactive/current/last preview cards, retains selection, honors cancel/save, '
               'and restores Enter, typing, caret and the main editor.')

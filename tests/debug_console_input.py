@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-debug-console-') as directory:
             return editor.lua('local s=require("dap").session();return s and s.stopped_thread_id and s.current_frame.line==3')
         def escape():
             editor.call('nvim_input', '<Esc>')
-            editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Console Normal mode')
+            editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'i', 'Esc preserves console input')
         def body_click():
             editor.lua('vim.cmd("redraw!")')
             row, col = editor.lua('local w=...;local p=vim.api.nvim_win_get_position(w);return {p[1]+vim.api.nvim_win_get_height(w)-2,p[2]+8}', win)
@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-debug-console-') as directory:
         assignment = 'tracking_data["history"] = ["DOR"]'
         editor.call('nvim_input', assignment)
         escape()
+        editor.lua('vim.cmd("stopinsert")')  # Still cover the native Normal-mode REPL action.
         editor.call('nvim_input', '<CR>')
         editor.wait(lambda: any(r['expression'] == assignment for r in results()), 'Normal Enter submits assignment')
         evaluation = next(r for r in results() if r['expression'] == assignment)

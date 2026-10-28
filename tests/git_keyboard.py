@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-keyboard-') as directory:
         status, history = editor.lua('return {select(2,require("config.sidebar").state()),require("config.sidebar").history_win}')
         editor.wait(lambda: editor.lua('return #require("config.sidebar").commits') >= 2, 'Commit graph')
         if editor.lua('return vim.api.nvim_get_current_win()') != status:
-            key('<M-a><M-a><Left><CR>')
+            key('<M-a><Left><CR>')
         normal_rows()
         editor.call('nvim_win_set_cursor', status, [5, 0])
         key('<Down>')  # First staged file beneath its section heading.
@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-keyboard-') as directory:
         assert editor.lua('return require("config.git").messages[require("config.sidebar").state().path]') == 'Draft commit message'
 
         before = geometry()
-        key('<M-a><M-a><Up>')
+        key('<M-a><Up>')
         assert editor.lua('return require("config.panel_navigation").state.target') == field()
         assert editor.lua('return vim.api.nvim_get_current_win()') == status
         assert editor.lua('return #require("config.panel_navigation").state.overlays') == 4, 'Commit input uses a border frame'
@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-git-keyboard-') as directory:
         key('<M-a><Down><CR>')
         assert editor.lua('return vim.api.nvim_get_current_win()') == status
         normal_rows()
-        key('<M-a><M-a><Down><CR>')
+        key('<M-a><Down><CR>')
         assert editor.lua('return vim.api.nvim_get_current_win()') == history
         normal_rows()
         key('<Down><S-F10>')

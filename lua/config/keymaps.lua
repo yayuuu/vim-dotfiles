@@ -10,7 +10,7 @@ action("<C-o>", ide.pick_file, "Open file")
 action("<C-s>", ide.save, "Save file")
 action("<C-S-s>", ide.save_as, "Save as")
 action("<C-w>", ide.close_file, "Close file")
-map({ "x", "s" }, "<Esc>", "<C-\\><C-n>", { desc = "Leave selection in Normal mode" })
+require("config.escape").setup()
 map(edit, "<C-a>", "<Esc>ggVG<C-g>", { desc = "Select all" })
 map("s", "<Tab>", "<C-g>>gv<C-g>", { desc = "Indent selection" })
 map("x", "<Tab>", ">gv<C-g>", { desc = "Indent selection" })
@@ -64,7 +64,6 @@ action("<F12>", function() vim.api.nvim_set_current_win(ide.editor_window());vim
 action("<S-F12>", function() vim.api.nvim_set_current_win(ide.editor_window());vim.lsp.buf.references() end, "Find references")
 action("<C-S-p>", function() Snacks.picker.commands() end, "Command palette")
 action("<M-p>", function() Snacks.picker.commands() end, "Command palette")
-map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal input" })
 -- Neovim's terminal encodes keypad navigation as keypad digits. Normalize only
 -- navigation names; <k0>...<k9> and ordinary digits retain numeric input.
 for _, key in ipairs({ "Home", "End", "Up", "Down", "Left", "Right", "PageUp", "PageDown", "Insert", "Del" }) do

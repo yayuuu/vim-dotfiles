@@ -1,10 +1,14 @@
 # Neovim: shortcuts and usage
 
 Run `nvim` or `nvim /path/to/project`.
-Files open in Insert mode. Esc switches to Normal mode;
-`i` returns to Insert mode. F1 or Help opens this guide.
+Files open in Insert mode. Esc first closes completion or a popup while keeping
+Insert. With nothing left to dismiss, Esc enters Normal in the editor;
+`i` returns to Insert. Other text fields keep input mode on Esc. Dialogs and
+pickers cancel directly; command-line Esc closes completion first, then cancels
+the command and resumes input. F1 or Help opens this guide.
 Editing shortcuts preserve Select or Insert; Copy, Cut and Paste on a selection
-return to Insert. Esc also switches directly from a selection to Normal.
+return to Insert. Esc ends an editor selection in Normal after closing any popup;
+in other text fields it resumes Insert.
 
 Menus open without a selected item. Down/Up selects the first/last action;
 further presses move between actions. Enter runs the highlighted action.
@@ -13,16 +17,19 @@ selection. Left/Right switches headings in the top menu. Esc closes the menu.
 
 ## Keyboard navigation
 
-Press **Alt+A** to select a tab: Left/Right highlights document tabs in the editor,
-or Projects / Files / Search / Debug / Git / Tabs from the sidebar. **Enter**
+Press **Alt+A** to choose a panel. All four arrow keys move a bright frame
+between panels; Enter moves keyboard focus there.
+
+Press **Alt+A again** to select a tab in the highlighted panel: Left/Right
+highlights document tabs in the editor, or Projects / Files / Search / Debug /
+Git / Tabs from the sidebar. **Enter**
 opens the highlighted tab; **Esc** cancels without changing it.
 While selecting document tabs, **q** closes the highlighted tab and continues
 selection. Unsaved changes use the usual Save / Don't save / Cancel dialog.
 After closing the last card, Enter, Esc or a mouse click exits selection.
 
-Press **Alt+A again** to choose a panel. All four arrow keys move a bright frame
-between panels; Enter moves keyboard focus there. A terminal starts with panel
-selection immediately. Press Alt+A once more to open the first top menu, or
+Press Alt+A once more to open the first top menu (the tab phase is skipped for
+panels without tabs, such as a terminal), or
 select the menu bar with Up and Enter. In that menu, Left/Right changes headings
 and Up/Down chooses an action. Clicking with the mouse cancels tab/panel selection
 and performs the click normally.
@@ -58,6 +65,7 @@ test
 | Ctrl+Q | Comment/uncomment the line or all selected lines |
 | Ctrl+F | Find text in the file |
 | F3 / Shift+F3 | Next / previous match |
+| F3 in the Ctrl+F input | Confirm the query and go to the first match |
 | Ctrl+H | Replace panel for the current file (Grug Far) |
 | Ctrl+Shift+F / Alt+F | Open Search in the left panel and focus its input |
 | Ctrl+G | Go to line |
@@ -67,7 +75,8 @@ test
 | Ctrl+Shift+P / Alt+P | Command palette |
 
 Ctrl+H opens the Grug Far panel restricted to the current file.
-In the replace panel, press Esc and then \r to apply the replacement; regular expressions are supported by default.
+In the replace panel, **Ctrl+Enter** applies the replacement from an input field;
+Esc closes the panel. Regular expressions are supported by default.
 Formatting is available from the context menu; saving does not format automatically.
 Copy and cut in the editor use the system clipboard, shared with other applications.
 
@@ -119,7 +128,7 @@ The code context menu also provides documentation, code actions, and formatting.
 | Alt+G | LazyGit: staging, commits, history, branches |
 | Alt+D | Diffview: repository diffs |
 | Ctrl+` / Alt+T / F4 | Show/hide the bottom terminal |
-| Esc, Esc in the terminal | Exit terminal input mode |
+| Esc in the terminal, including repeated presses | Send Esc to the running program; keep terminal input |
 
 File > Open folder opens a project. Terminal > New terminal creates a session.
 Right-click in the terminal opens Copy (or Copy line), Paste, Select all, and
@@ -146,6 +155,8 @@ selected item's context menu. Up at the start of Git Status enters Commit messag
 Down from that input returns to the status list. The input is also available
 through Alt+A panel selection and enters Insert automatically when selected.
 When a file appears in both groups, opening it from Changes compares against its staged version.
+The status bar keeps the active project's branch and sync counters when focusing
+diffs (including HEAD), terminals, sidebars or input fields.
 Click the branch name to select a branch. Type a new name with no matching branches
 and press Enter to create and switch to it. The `[↑… ↓…]` button synchronizes
 through fetch, pull, and push. Without an upstream, it publishes the branch and
