@@ -462,6 +462,11 @@ or perform operations on the user's actual repositories independently.
 - The header shows the current program and directory, e.g. `bash - ~/project`,
   instead of a fixed Terminal label. Update it after `cd` and when a program starts.
 - Clicking the terminal or entering it with the keyboard enables terminal input.
+  Returning from Watches or another native prompt must wait for Neovim's prompt
+  mode transition before resuming terminal input; a WinEnter callback alone can
+  run too early and leave the terminal in Normal, swallowing Enter. Preserve
+  scrollback and explicit Esc, Esc exits. Verify the actual CR byte in a child
+  PTY while the debugger is paused with `tests/debugger_navigation.py`.
   Keypad navigation with NumLock off must reach terminal programs as Home/End,
   arrows, PageUp/PageDown, Insert/Delete, preserving numeric keypad digit input.
   Esc, including repeated presses, stays in terminal input and reaches the child.
@@ -523,8 +528,31 @@ or perform operations on the user's actual repositories independently.
   or continuing. Resolve PHP's leading `$`, property/array references and a
   simple identifier fallback when no parser is available. Do not include calls
   from a container's index expression.
+  The evaluation popup shares Scopes/Watches row navigation: Normal mode, hidden
+  caret, full-row highlight, Up/Down, Enter and row-wide clicks to expand/collapse.
+  Use the same expanders and Canvas action metadata, preserve Esc dismissal and
+  close stale popups on stepping/continuing. Verify with `tests/debugger_values.py`.
 - Left-click expands/collapses variables, Watches, and thread/breakpoint groups.
+  Debug expanders use `▸` when collapsed and `▾` when expanded, matching Files
+  when icons are enabled; the ASCII setting retains `>`/`v`. Watch-expression
+  lookup and variable indentation must account for multibyte glyphs rather than
+  assuming two prefix bytes. Keep the native Watches input prompt `> ` separate.
   Clicking a breakpoint or stack frame opens its source in the main editor.
+  The whole rendered row is actionable, including its value and empty space to
+  the right; preserve margins and scrollbar gestures. Own clicks through release,
+  cancel actions after drags, and recover from a missing release on a fresh press.
+  All four lists enter Normal mode from mouse or keyboard focus, hide the caret,
+  highlight the full content row, navigate with Up/Down and activate with Enter.
+  Watches' final native prompt row always enters Insert, including a click at
+  either end of the row or keyboard Down from the list. Esc keeps that row in
+  Insert; Up returns to the preceding list row in Normal. Enter submits through
+  the native prompt callback and leaves the next expression ready for input.
+  Preserve unfinished text and cursor across asynchronous DAP refreshes and
+  focus changes. Other rows remain noneditable, and blank space below the list
+  must not activate the prompt. Keep row actions and the local DAP UI Canvas
+  adapter in `debugger_navigation.lua`; recheck its `mappings` and `prompt` fields
+  after plugin updates. Do not infer actions from rendered arrow/text patterns
+  or drain queued input through feedkeys with the x flag when selecting a row.
 - Each section has a context menu with appropriate actions and shortcuts. Variables:
   expand/collapse, Add to watches, Copy value, Copy expression, Copy sentence
   (the entire line), Edit value, Evaluate in debug console. Watches: add,
@@ -607,6 +635,20 @@ or perform operations on the user's actual repositories independently.
 - Clicking a commit in the sidebar graph opens its message and patch in a picker.
   Custom items using Snacks' `git_log` formatter must provide `msg` as well as
   `commit` and searchable `text`; closing the picker preserves panels and unsaved edits.
+  Load commit metadata and blob sizes asynchronously before requesting patches.
+  Files with more than 800 changed lines or 128 KiB of old/new blob data start
+  collapsed, including deleted and minified files; binary files do too. Bound
+  automatic loading across the commit (256 KiB, 4000 changed lines, 40 files).
+  Click a file header or use Enter/Space in the preview to load/collapse that
+  file. Explicit expansion still bounds displayed patch bytes and line lengths,
+  with visible truncation labels. Merge previews compare against the first parent;
+  rename paths may appear as deletion/addition. Keep this in `commit_preview.lua`.
+  Esc and q close from the input, list or preview, including Insert mode;
+  × uses the picker's public close action. Cancel pending Git jobs and ignore
+  late results without replaying keys into Git Status. Preserve window IDs,
+  geometry, document contents and terminal sessions through every close path.
+  Verify small/large patches, delayed jobs, all close actions and unchanged
+  layouts with `tests/git_commit_preview.py` and `tests/commit_preview_large.py`.
 - Long commit previews have a vertical scrollbar on the right preview border.
   Support track clicks, thumb dragging, and the wheel without stealing input focus.
   Measure screen lines, including wrapped text and virtual lines; follow scrolling
@@ -630,6 +672,14 @@ or perform operations on the user's actual repositories independently.
   Shift+click selects a range, Ctrl+click toggles an individual selection, and right-click
   preserves the selection. The menu offers Stage/Discard in Changes and Unstage
   in Staged Changes.
+  Shift+Up/Down and Shift+PageUp/PageDown extend or contract a range from its
+  anchor, skip headings, scroll it into view and stay in Normal mode. Space
+  toggles the focused file without opening its diff; plain arrows preserve
+  selections built with Space or Ctrl+A so separate files can be marked.
+  Ctrl+A selects only files in the focused Changes or Staged Changes section,
+  including when its heading is focused. Shift+F10 preserves a selected row's
+  range; Stage/Unstage/Discard use all selected files in the matching section.
+  Cover keyboard selection and real index changes in `tests/git_keyboard_selection.py`.
 - Git Status and Commits use Normal mode, a hidden caret and full-row selection.
   Up/Down in Git Status moves only the current-row highlight, clearing earlier
   mouse selections without creating a Visual selection; retain Shift/Ctrl mouse
@@ -787,6 +837,7 @@ or perform operations on the user's actual repositories independently.
 | `terminals.lua`, `problems.lua` | Bottom panel and visibility restoration |
 | `terminal_mouse.lua` | Child mouse-reporting requests observed from terminal output |
 | `debugger.lua`, `debug_source.lua`, `debugger_mouse.lua`, `breakpoints.lua` | DAP, sections, gestures, and breakpoints |
+| `debugger_navigation.lua` | DAP row actions, list/input modes, preserved Watches drafts and local Canvas adapter |
 | `debugger_inspect.lua` | On-demand variable popup, expression lookup, and Ctrl+click capture |
 | `git.lua`, `git_source.lua`, `git_sync.lua`, `git_commands.lua`, `diff.lua` | Status, Git operations, command palette, upstream, and editable diff |
 | `git_header.lua` | Pinned Git Status header and permanent commit input geometry |
@@ -897,6 +948,7 @@ Run a single scenario:
   Files following/revealing diff documents → `diff_files_tree.py`.
   Minimap gestures and immediate viewport updates → `minimap_drag.py`.
   Minimap/horizontal drag releases over other controls → `scroll_drag_capture.py`.
+  Debug row actions/modes, Watches prompt/drafts, Alt+A entry and paused-session terminal Enter → `debugger_navigation.py`.
 - Check visible behavior and actual gestures. For regressions, consider a test
   that fails before the fix. Documentation-only changes do not require the full UI suite.
   Run `git diff --check`.

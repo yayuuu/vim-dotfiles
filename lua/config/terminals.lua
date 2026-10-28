@@ -2,6 +2,7 @@
 local M = { items = {}, serial = 0, rows = {} }
 local api = vim.api
 local namespace = api.nvim_create_namespace("DesktopTerminalList")
+local input_generation = 0
 local function valid(win) return win and api.nvim_win_is_valid(win) end
 local function buffer_valid(buf) return type(buf) == "number" and api.nvim_buf_is_valid(buf) end
 local function console_input(win, buf)
@@ -40,13 +41,19 @@ local function resume_input()
   if M.menu_context and M.menu_context.win == win and M.menu_context.buf == buf then return end
   local console = M.console_active and buf == M.console_buf and vim.bo[buf].buftype == "prompt"
   if win ~= M.win or (vim.bo[buf].buftype ~= "terminal" and not console) then return end
-  vim.schedule(function()
+  input_generation = input_generation + 1
+  local generation = input_generation
+  -- Leaving a native prompt (Watches or the debug console) can finish after
+  -- WinEnter and scheduled callbacks. Resume only after that mode transition,
+  -- as we already do when returning from a terminal to an editor document.
+  vim.defer_fn(function()
+    if generation ~= input_generation or require("config.mouse_capture").active() then return end
     if M.menu_context and M.menu_context.win == win and M.menu_context.buf == buf then return end
     if valid(win) and api.nvim_get_current_win() == win and api.nvim_get_current_buf() == buf
       and vim.fn.mode() == "n" then
       if console then console_input(win, buf) else vim.cmd("startinsert") end
     end
-  end)
+  end, 20)
 end
 
 function M.context_menu(mouse, terminal_input)
@@ -297,6 +304,7 @@ end
 function M.setup()
   local group = api.nvim_create_augroup("DesktopTerminals", { clear = true })
   api.nvim_create_autocmd("WinEnter", { group = group, callback = resume_input })
+  api.nvim_create_autocmd("WinLeave", { group = group, callback = function() input_generation = input_generation + 1 end })
   if M.title_timer then M.title_timer:stop(); M.title_timer:close() end
   M.title_timer = vim.uv.new_timer()
   M.title_timer:start(500, 500, vim.schedule_wrap(M.update_title))
@@ -309,11 +317,17 @@ function M.setup()
     vim.schedule(function() M.close(event.buf) end)
   end })
   local keys = {}
+  local cancel_input = { [vim.keycode("<C-\\>")] = true }
+  for _, direction in ipairs({ "Up", "Down", "Left", "Right" }) do cancel_input[vim.keycode("<ScrollWheel" .. direction .. ">")] = true end
   for _, prefix in ipairs({ "", "2-", "3-", "4-" }) do
     keys[vim.keycode("<" .. prefix .. "LeftMouse>")] = false
     keys[vim.keycode("<" .. prefix .. "LeftRelease>")] = true
   end
   vim.on_key(function(key, typed)
+    -- A deliberate terminal escape or scrollback gesture cancels a pending
+    -- focus request, including one left over from leaving a prompt buffer.
+    if api.nvim_get_current_win() == M.win and (cancel_input[key] or cancel_input[typed]
+      or typed:find("\27", 1, true)) then input_generation = input_generation + 1 end
     if require("config.mouse_capture").blocked(key, typed) then return end
     if keys[typed] ~= nil then key = typed end
     if keys[key] == nil then return end

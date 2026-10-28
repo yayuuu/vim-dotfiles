@@ -47,11 +47,12 @@ end
 
 function M.select(state, node, extend, keep, toggle)
   if not node or node.type ~= "file" then
-    state.ide_selected, state.ide_anchor = {}, nil
+    state.ide_selected, state.ide_anchor, state.ide_keyboard_selection = {}, nil, nil
     M.highlight(state); return
   end
   local id = node:get_id()
   if keep and state.ide_selected and state.ide_selected[id] then return end
+  state.ide_keyboard_selection = nil
   if toggle then
     state.ide_selected = state.ide_selected or {}
     state.ide_selected[id] = not state.ide_selected[id] or nil
@@ -175,7 +176,7 @@ end
 function M.set_root(path)
   require("neo-tree").ensure_config()
   local state = require("neo-tree.sources.manager").get_state("git_status")
-  if state.path ~= path then state.ide_selected, state.ide_anchor = {}, nil end
+  if state.path ~= path then state.ide_selected, state.ide_anchor, state.ide_keyboard_selection = {}, nil, nil end
   state.path, state.dirty = path, true
 end
 
@@ -494,23 +495,81 @@ function M.commit(state)
   end)
 end
 
-function M.navigate_status(state, direction, from_input)
+function M.navigate_status(state, direction, from_input, extend)
   if not state.winid or not vim.api.nvim_win_is_valid(state.winid) or not state.tree
     or vim.api.nvim_win_get_buf(state.winid) ~= state.bufnr then return end
   local first = require("config.git_header").rows + 1
   if vim.api.nvim_buf_line_count(state.bufnr) < first then return end
-  local row = from_input and first or vim.api.nvim_win_get_cursor(state.winid)[1] + direction
-  if row < first then M.input(state, true); return end
-  row = math.max(first, math.min(vim.api.nvim_buf_line_count(state.bufnr), row))
+  local origin = vim.api.nvim_win_get_cursor(state.winid)[1]
+  local last = vim.api.nvim_buf_line_count(state.bufnr)
+  local row = from_input and first or origin + direction
+  if row < first and not extend then M.input(state, true); return end
+  row = math.max(first, math.min(last, row))
+  if extend then
+    local step = direction > 0 and 1 or -1
+    local function find_file(start, delta)
+      for line = start, delta > 0 and last or first, delta do
+        local node = state.tree:get_node(line)
+        if node and node.type == "file" then return line end
+      end
+    end
+    -- Section headings are navigation rows, never selection targets. Clamp
+    -- at the first/last file instead of entering the commit input with Shift.
+    row = find_file(row, step) or find_file(row, -step)
+    if not row then return end
+    if not state.ide_anchor then
+      local node = state.tree:get_node(origin)
+      if node and node.type == "file" then state.ide_anchor = node:get_id() end
+    end
+  end
   vim.cmd("stopinsert")
   vim.api.nvim_set_current_win(state.winid)
   vim.api.nvim_win_set_cursor(state.winid, { row, 0 })
-  -- Keyboard focus is painted by CursorLine, independently of mouse ranges.
-  -- Do not leave a Visual selection behind as the focused row changes.
   local node = state.tree:get_node(row)
-  state.ide_selected = {}
-  state.ide_anchor = node and node.type == "file" and node:get_id() or nil
+  if extend then M.select(state, node, true)
+  else
+    -- Plain navigation clears ranges, retaining disjoint Space/select-all
+    -- marks; Shift never invokes Vim's Visual/Select or editor mappings.
+    if not state.ide_keyboard_selection then state.ide_selected = {} end
+    state.ide_anchor = node and node.type == "file" and node:get_id() or nil
+    M.highlight(state)
+  end
+end
+
+function M.select_section(state)
+  local node = state.tree and state.tree:get_node()
+  local section = node and node.extra and node.extra.section
+  if not section then return end
+  local selected = {}
+  for _, file in ipairs(state.tree:get_nodes(state.path .. "::" .. section)) do
+    if file.type == "file" then selected[file:get_id()] = true end
+  end
+  state.ide_selected = selected
+  state.ide_anchor = node.type == "file" and node:get_id() or nil
+  state.ide_keyboard_selection = true
   M.highlight(state)
+end
+
+function M.bind_selection_keys(state)
+  local opts = { buffer = state.bufnr, silent = true }
+  for key, direction in pairs({ Up = -1, Down = 1, PageUp = -1, PageDown = 1 }) do
+    local page = key:find("Page", 1, true) ~= nil
+    for _, extend in ipairs({ false, true }) do
+      vim.keymap.set("n", "<" .. (extend and "S-" or "") .. key .. ">", function()
+        local step = page and math.max(1, vim.api.nvim_win_get_height(state.winid) - require("config.git_header").rows - 1) or 1
+        M.navigate_status(state, direction * step, false, extend)
+      end, vim.tbl_extend("force", opts, { desc = extend and "Extend Git file selection" or "Select Git row / commit message" }))
+    end
+  end
+  vim.keymap.set("n", "<Space>", function()
+    local node = state.tree and state.tree:get_node()
+    if node and node.type == "file" then
+      M.select(state, node, false, false, true)
+      state.ide_keyboard_selection = true
+    end
+  end, vim.tbl_extend("force", opts, { desc = "Toggle Git file selection" }))
+  vim.keymap.set("n", "<C-a>", function() M.select_section(state) end,
+    vim.tbl_extend("force", opts, { desc = "Select all files in Git section" }))
 end
 
 function M.input(state, focus)
@@ -587,10 +646,7 @@ function M.after_render(state)
   if state.name == "git_status" and state.winid and vim.api.nvim_win_is_valid(state.winid) then
     vim.keymap.set({ "n", "i", "x", "s" }, "<F5>", M.refresh,
       { buffer = state.bufnr, desc = "Refresh Git status" })
-    for key, direction in pairs({ ["<Up>"] = -1, ["<Down>"] = 1 }) do
-      vim.keymap.set("n", key, function() M.navigate_status(state, direction) end,
-        { buffer = state.bufnr, desc = "Select Git row / commit message" })
-    end
+    M.bind_selection_keys(state)
     vim.keymap.set("n", "<Left>", "<Nop>", { buffer = state.bufnr })
     vim.keymap.set("n", "<Right>", "<Nop>", { buffer = state.bufnr })
     M.align(state)

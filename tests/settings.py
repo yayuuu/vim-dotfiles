@@ -55,6 +55,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-settings-') as directory:
             marker = editor.lua('return require("config.git_source").components.git_file({},'
                                 '{name="example.lua",extra={status="M"}}).text')
             assert marker == ('' if enabled else 'M') + ' example.lua'
+            editor.lua('require("dapui")')
+            assert editor.lua('return require("dapui.config").icons.collapsed') == ('▸' if enabled else '>')
+            assert editor.lua('return require("dapui.config").icons.expanded') == ('▾' if enabled else 'v')
             if enabled:
                 assert editor.lua('return require("config.settings").read(...).icons', str(root / 'missing.json'))
                 malformed = root / 'invalid.json'

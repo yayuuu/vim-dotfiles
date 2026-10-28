@@ -150,6 +150,15 @@ use `Copy (2) of name`, etc. Existing files are preserved.
 R / F5 in the Git panel refreshes the status. Shift+click selects a range of files,
 and Ctrl+click adds or removes a file from the selection. Stage / Unstage / Discard
 and Commit are available in the Git panel and its menu. Discard requires confirmation.
+Shift+Up/Down or Shift+PageUp/PageDown extends or contracts a range of files.
+Space toggles one file; arrows preserve selections built with Space or Ctrl+A.
+Ctrl+A selects all files in the Changes or Staged Changes section under the cursor.
+Shift+F10 opens the context menu; Stage / Unstage / Discard acts on all selected
+files in the corresponding section.
+Click a commit to preview its message and changes. Large/minified files start
+collapsed; click their header or use Enter/Space in the preview to expand them.
+Very large previews show a labeled excerpt. Esc, q or × closes the whole preview
+and keeps the Git panels open, including while changes are loading.
 Git Status and Commits highlight whole rows in Normal mode. Shift+F10 opens the
 selected item's context menu. Up at the start of Git Status enters Commit message;
 Down from that input returns to the status list. The input is also available
@@ -189,6 +198,11 @@ You can also run `:GitMerge branch-name` or choose Git > Merge branch in the men
 
 Left-click expands or collapses an object. Click a breakpoint or stack frame to open
 its source; right-click provides actions appropriate to the selected item.
+Click anywhere in a row to activate it. Debug lists use Normal mode with a hidden
+caret and full-row selection: Up/Down selects a row and Enter activates it.
+The last row in Watches accepts a new expression in Insert mode. Down from the
+list enters it; Up returns to the list. Esc keeps this input ready for typing,
+and Enter adds the expression. Background refreshes preserve unfinished input.
 Debug console opens the debugger console.
 Click its body to type at the `dap>` prompt, then press Enter to evaluate.
 PHP expressions run while the script is paused at a breakpoint, in the selected

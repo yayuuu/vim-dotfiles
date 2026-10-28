@@ -1,5 +1,6 @@
 """Inspect values only after Ctrl+click or the context action, using real debugpy."""
 from pathlib import Path
+import re
 import tempfile
 from ui import Editor
 
@@ -76,6 +77,45 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-values-') as directory:
         editor.call('nvim_input', '<Esc>')
         editor.wait(lambda: not popup(), 'Nested popup closes')
 
+        # The inspector uses the same row actions and list mode as Scopes/Watches.
+        ctrl_click(2, 2, release='', insert=True)
+        editor.wait(lambda: 'payload' in text() and 'child' in text(), 'Container inspector')
+        win = popup()
+        def row_containing(needle):
+            lines = editor.lua('return vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...),0,-1,false)', win)
+            return next((i + 1 for i, line in enumerate(lines)
+                         if re.match(r'''^\s*[▸▾]?\s*['"]?''' + re.escape(needle) + r'\b', line)), None)
+        def popup_click(row, right=True):
+            editor.lua('vim.cmd("redraw!")')
+            position = editor.lua('local w,r=...;local p=vim.fn.screenpos(w,r,1);'
+                                  'local c=vim.api.nvim_win_get_position(w);'
+                                  'return {p.row-1,c[2]+(vim.api.nvim_win_get_width(w)-2)}', win, row)
+            if not right:
+                position[1] = editor.lua('local w,r=...;return vim.fn.screenpos(w,r,1).col-1', win, row)
+            editor.click(*position)
+        editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Inspector enters Normal')
+        editor.wait(lambda: editor.lua('return vim.o.guicursor') == 'a:DesktopPanelCursor', 'Inspector hides caret')
+        assert editor.lua('return vim.wo.cursorline and vim.wo.cursorlineopt=="both"')
+        editor.call('nvim_input', '<CR>')
+        editor.wait(lambda: row_containing('child'), 'Enter expands inspector root')
+        child = row_containing('child')
+        editor.lua('vim.api.nvim_win_set_cursor(...,{1,0})', win)
+        for _ in range(child - 1):
+            editor.call('nvim_input', '<Down>')
+        editor.wait(lambda: editor.lua('return vim.api.nvim_win_get_cursor(...)[1]', win) == child, 'Down selects child row')
+        editor.call('nvim_input', '<CR>')
+        editor.wait(lambda: row_containing('answer'), 'Enter expands inspector child')
+        assert re.search(r'''▾ ['"]?child\b''', text()), text()
+        popup_click(row_containing('child'))
+        editor.wait(lambda: not row_containing('answer'), 'Right side of inspector row collapses child')
+        popup_click(row_containing('child'), right=False)
+        editor.wait(lambda: row_containing('answer'), 'Left side of inspector row expands child')
+        editor.call('nvim_input', '<Up>')
+        editor.wait(lambda: editor.lua('return vim.api.nvim_win_get_cursor(...)[1]', win) == child - 1, 'Up selects preceding row')
+        editor.call('nvim_input', '<Esc>')
+        editor.wait(lambda: not popup(), 'Navigated inspector closes with Esc')
+        editor.wait(lambda: editor.lua('return vim.o.guicursor') != 'a:DesktopPanelCursor', 'Inspector restores editor caret')
+
         # The editor context menu shares the same action.
         row, col = location(3, 2)
         editor.call('nvim_input_mouse', 'right', 'press', '', 0, row, col)
@@ -113,10 +153,11 @@ with tempfile.TemporaryDirectory(prefix='nvim-debugger-values-') as directory:
         assert editor.lua('local parser=vim.treesitter.get_node;vim.treesitter.get_node=function() error("missing parser") end;'
                           'local value=require("config.debugger_inspect").expression(...,2,3);vim.treesitter.get_node=parser;return value', phpbuf) == '$answer'
         assert not editor.lua('return vim.bo[...].modified', phpbuf)
-        print('PASS: no automatic value plugin/evaluations; Ctrl+click and context menu open bounded popups; nested expressions, generic release, Esc/step/continue and PHP dollar names work; source unchanged', flush=True)
+        print('PASS: Ctrl+click/context inspector; Normal mode, hidden caret/full-row selection, Up/Down, Enter and row-wide clicks with nested Unicode expanders; Esc/step/continue and PHP names; no background evaluation or source edits', flush=True)
     except Exception:
         print(editor.lua('return vim.fn.execute("messages")'), flush=True)
         print(editor.lua('return _G.debug_evaluations'), flush=True)
+        print(text(), flush=True)
         raise
     finally:
         try:

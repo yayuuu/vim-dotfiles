@@ -61,5 +61,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-commit-preview-') as directory:
         messages = editor.lua('return vim.fn.execute("messages")')
         assert 'E5108' not in messages and 'attempt to index' not in messages, messages
         print('PASS: graph clicks render conventional/ordinary commit subjects and patches; close button preserves panels and unsaved edits.')
+    except Exception:
+        print(editor.lua('return vim.fn.execute("messages")'), flush=True)
+        print(editor.lua('local p=Snacks.picker.get()[1];return p and vim.api.nvim_buf_get_lines(p.preview.win.buf,0,-1,false)'), flush=True)
+        raise
     finally:
         editor.close()
