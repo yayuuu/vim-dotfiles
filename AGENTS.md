@@ -231,13 +231,21 @@ or perform operations on the user's actual repositories independently.
   Search panel's local Shift+Tab mode toggle.
 - Scrolling the editor with the mouse wheel must preserve both endpoints of
   character, line and rectangular selections, including reversed Select/Visual
-  ranges. Selected text may leave the viewport without extending the range.
-  `selection_scroll.lua` parks the logical range, paints its original bounds and
+  ranges. Horizontal wheels, Shift+wheel and scrollbar gestures also preserve
+  the text column of an unselected Normal/Insert cursor. Cursor and selection
+  endpoints may leave either viewport edge without following the scroll offset.
+  `selection_scroll.lua` parks the logical cursor/range, paints its original bounds and
   hides the clamped native selection/caret. Restore the range before keyboard
   actions, context-menu editing and terminal paste. A new left click starts a
-  fresh gesture at the scrolled position. Clean up highlights, scrolloff and
-  cursor styling when the selection ends or its window/buffer changes; do not
+  fresh gesture at the scrolled position; a scrollbar press keeps the parked range
+  and the shared mouse capture through release. Keep horizontal diff views
+  synchronized without moving the logical focused cursor. Preserve byte/virtual
+  columns and the preferred column for subsequent keyboard movement, including
+  tabs, wide characters and short lines. Clean up highlights, scrolloff, sidescrolloff,
+  temporary virtualedit and cursor styling when parking ends or the window/buffer changes; do not
   alter sidebar/terminal scrolling or another widget's mouse capture.
+  Verify both axes with `tests/selection_scroll.py`, `tests/horizontal_selection_scroll.py`
+  and `tests/diff_horizontal_drag.py`.
 - Copy/Cut in the editor, including Ctrl+C/Ctrl+X and menu actions, publish to
   the system clipboard so other applications can paste the text. Use Neovim's
   native clipboard-provider detection, preferring Wayland tools in a Wayland

@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='nvim-diff-horizontal-drag-') as directo
 
         for mode in ('normal', 'insert'):
             for side in ('left', 'right'):
-                editor.lua('vim.cmd("stopinsert");local d=require("config.diff").active;vim.api.nvim_set_current_win(d.right);'
+                editor.lua('require("config.selection_scroll").restore();vim.cmd("stopinsert");local d=require("config.diff").active;vim.api.nvim_set_current_win(d.right);'
                            'vim.api.nvim_win_set_cursor(d.right,{21,0})')
                 if mode == 'insert':
                     editor.lua('vim.cmd("startinsert")')
@@ -43,6 +43,8 @@ with tempfile.TemporaryDirectory(prefix='nvim-diff-horizontal-drag-') as directo
                 settle()
                 before = views()
                 assert all(v['leftcol'] == 37 for v in before), before
+                assert editor.lua('local s=require("config.selection_scroll").state;'
+                                  'return s and s.cursor[2]==21 and s.cursor[3]==1'), 'Horizontal scrolling parks the original editor column'
                 bar = editor.lua('local b=require("config.hscroll").bars[require("config.diff").active[...]];'
                                  'local p=vim.api.nvim_win_get_position(b.win);return {row=p[1],col=p[2],'
                                  'start=b.start,thumb=b.thumb,span=b.span,maximum=b.maximum}', side)

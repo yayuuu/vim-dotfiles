@@ -98,7 +98,9 @@ with tempfile.TemporaryDirectory(prefix='nvim-selection-scroll-') as directory:
         # Reversed character, whole-line and rectangular ranges must survive
         # moving below the viewport as well as above it.
         for kind in ('v', 'V', '\x16'):
-            editor.call('nvim_input', '<Esc>')
+            # Prepare the mode directly: Esc may first dismiss the previous
+            # yank notification under the shared popup-first Escape policy.
+            editor.lua('vim.cmd("stopinsert")')
             editor.wait(lambda: editor.lua('return vim.fn.mode()') == 'n', 'Normal before another selection')
             editor.lua('vim.api.nvim_win_set_cursor(0,{160,4});vim.cmd("normal! zz");vim.cmd.normal({...,bang=true});'
                        'vim.api.nvim_win_set_cursor(0,{153,12})', kind)

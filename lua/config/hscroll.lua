@@ -63,6 +63,7 @@ function M.set(win, column)
   if not valid(win) then return end
   local maximum = M.bounds(win)
   column = math.floor(math.max(0, math.min(maximum, column)))
+  require("config.selection_scroll").horizontal(win)
   local wins = { win }
   local diff = require("config.diff").active
   if diff and (win == diff.left or win == diff.right) then wins = { diff.left, diff.right } end
@@ -70,8 +71,8 @@ function M.set(win, column)
   for _, target in ipairs(wins) do
     if valid(target) then api.nvim_win_call(target, function()
       local view = vim.fn.winsaveview()
-      -- Neovim keeps the caret in the viewport. Move it by the scroll delta,
-      -- just as its native zl/zh commands do, or redraw undoes the scroll.
+      -- Neovim requires a native caret in the viewport. selection_scroll parks
+      -- the logical editor cursor/range before moving this hidden placeholder.
       local _, available = extent(target)
       local viewport = api.nvim_win_get_width(target) - vim.fn.getwininfo(target)[1].textoff
       -- Match Neovim's native cursor margin. A smaller margin makes redraw
@@ -231,6 +232,10 @@ function M.setup()
   for _, direction in ipairs({ "Left", "Right", "Up", "Down" }) do
     wheels[vim.keycode("<ScrollWheel" .. direction .. ">")] = direction
   end
+  wheels[vim.keycode("<S-ScrollWheelUp>")] = "Left"
+  wheels[vim.keycode("<S-ScrollWheelDown>")] = "Right"
+  wheels[vim.keycode("<S-ScrollWheelLeft>")] = "Left"
+  wheels[vim.keycode("<S-ScrollWheelRight>")] = "Right"
   vim.on_key(function(key, typed)
     local kind = mouse_keys[typed] or mouse_keys[key]
     if kind == "Mouse" then capture.cancel(M.drag); M.drag = nil end
@@ -239,6 +244,15 @@ function M.setup()
     if wheel then
       local mouse = vim.fn.getmousepos()
       local win = mouse.winid
+      if (wheel == "Left" or wheel == "Right") and editor(win) and not sidebar(win) and not vim.wo[win].wrap then
+        local amount = tonumber(vim.o.mousescroll:match("hor:(%d+)")) or 6
+        vim.schedule(function()
+          if valid(win) then
+            M.set(win, api.nvim_win_call(win, vim.fn.winsaveview).leftcol + (wheel == "Right" and amount or -amount))
+          end
+        end)
+        return ""
+      end
       local diff = require("config.diff").active
       if diff and win == diff.left and valid(diff.right) and (wheel == "Up" or wheel == "Down") then
         local buf = api.nvim_win_get_buf(win)
